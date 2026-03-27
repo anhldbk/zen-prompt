@@ -1,6 +1,6 @@
 [project]
 name = "zen-prompt"
-version = "v0.1.0"
+version = "v0.1.1"
 description = "Aesthetic inspiration for your shell"
 readme = "README.md"
 authors = [{ name = "Andy Le", email = "anhldbk@gmail.com" }]
