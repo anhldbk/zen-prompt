@@ -2,7 +2,7 @@
 
 Aesthetic inspiration for your shell.
 
-![](docs/photos/zen-prompt.png)
+<img src="docs/photos/zen-prompt.png" alt="drawing" width="600"/>
 
 ## Features
 
@@ -75,6 +75,11 @@ zen-prompt random --quote-width 60
 # Reuse a fixed image for every quote
 zen-prompt random --photo file@./cover.png
 ```
+
+Below is an example of a quote with a custom photo
+
+<img src="docs/photos/zen-prompt-with-custom-photo.png" alt="drawing" width="600"/>
+
 
 ### Crawling Later
 
