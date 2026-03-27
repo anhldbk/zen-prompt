@@ -1,0 +1,42 @@
+[project]
+name = "zen-prompt"
+version = "v0.1.0"
+description = "Aesthetic inspiration for your shell"
+readme = "README.md"
+authors = [{ name = "Andy Le", email = "anhldbk@gmail.com" }]
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.12.5",
+    "pydantic-settings>=2.13.1",
+    "rich>=14.3.3",
+    "scrapy>=2.14.2",
+    "textual-image>=0.8.5",
+    "tqdm>=4.67.3",
+    "typer>=0.24.1",
+]
+
+[project.scripts]
+zen-prompt = "zen_prompt.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["zen_prompt"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"docs/data" = "zen_prompt/data"
+
+[tool.hatch.build]
+exclude = [
+    "/docs/data/csv",
+    "/docs/data/json",
+    "/docs/prompts",
+    "/docs/superpowers",
+    "/scripts",
+    "/tests",
+]
+
+[dependency-groups]
+dev = ["pytest>=9.0.2", "ruff>=0.15.8"]

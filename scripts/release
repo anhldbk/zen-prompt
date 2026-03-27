@@ -1,0 +1,64 @@
+#!/bin/bash
+set -e
+
+# Usage: ./scripts/release <version> [--summary <summary>]
+VERSION=$1
+SUMMARY=""
+
+./scripts/zen-prompt distill
+./scripts/zen-prompt export
+
+if [ -z "$VERSION" ]; then
+	echo "Usage: $0 <version> [-s|--summary <summary>]"
+	exit 1
+fi
+
+shift
+
+while [[ "$#" -gt 0 ]]; do
+	case $1 in
+	-s | --summary)
+		SUMMARY="$2"
+		shift
+		;;
+	*)
+		echo "Unknown parameter passed: $1"
+		exit 1
+		;;
+	esac
+	shift
+done
+
+echo "Releasing v$VERSION..."
+
+# 1. Update pyproject.toml
+# We use python to perform a safe regex replacement of the top-level version
+python3 -c "
+import re
+with open('pyproject.toml', 'r') as f:
+    content = f.read()
+# Replace only the version line in the [project] section (start of file)
+new_content = re.sub(r'^version = \".*\"', f'version = \"$VERSION\"', content, flags=re.MULTILINE)
+with open('pyproject.toml', 'w') as f:
+    f.write(new_content)
+"
+
+# 2. Update zen_prompt/__init__.py
+echo "__version__ = \"$VERSION\"" >zen_prompt/__init__.py
+
+# 3. Git Operations
+git add pyproject.toml zen_prompt/__init__.py
+git commit -m "chore: release v$VERSION"
+
+if [ -n "$SUMMARY" ]; then
+	# Tag with summary as the message
+	git tag -a "v$VERSION" -m "$SUMMARY"
+else
+	# Simple tag
+	git tag "v$VERSION"
+fi
+
+echo "Successfully released v$VERSION"
+if [ -n "$SUMMARY" ]; then
+	echo "Tag message: $SUMMARY"
+fi

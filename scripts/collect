@@ -1,0 +1,33 @@
+#!/bin/bash
+# scripts/collect - Automated collection from specified Goodreads URLs
+set -e
+
+# Array of URLs to crawl
+URLS=(
+	"https://www.goodreads.com/quotes/tag/love"
+	"https://www.goodreads.com/quotes/tag/inspirational"
+	"https://www.goodreads.com/quotes/tag/funny"
+	"https://www.goodreads.com/quotes/tag/motivational"
+	"https://www.goodreads.com/quotes/tag/life"
+	"https://www.goodreads.com/quotes/tag/positive"
+	"https://www.goodreads.com/quotes/tag/tao"
+	"https://www.goodreads.com/quotes/tag/zen"
+	"https://www.goodreads.com/quotes/tag/tao-te-ching"
+	"https://www.goodreads.com/author/quotes/9074.Thich_Nhat_Hanh"
+)
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+zen_PROMPT="$SCRIPT_DIR/zen-prompt"
+
+echo "Starting automated collection from ${#URLS[@]} sources..."
+echo "--------------------------------------------------------"
+
+for url in "${URLS[@]}"; do
+	echo "Processing: $url"
+	# Use a polite delay and crawl the specific URL
+	"$zen_PROMPT" crawl --url "$url" --download-delay 1.0
+	echo -e "\nFinished processing: $url\n"
+done
+
+echo "--------------------------------------------------------"
+echo "All collections completed successfully."

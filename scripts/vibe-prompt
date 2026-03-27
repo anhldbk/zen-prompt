@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"
+uv run zen-prompt "$@"
