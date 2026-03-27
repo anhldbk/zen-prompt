@@ -6,8 +6,54 @@ on:
       - "v*" # Trigger on any tag starting with 'v'
 
 jobs:
+  wait-for-ci:
+    name: Wait for CI success
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      ci_run_id: ${{ steps.wait.outputs.ci_run_id }}
+    steps:
+      - name: Wait for CI workflow to succeed for this tag
+        id: wait
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          for _ in $(seq 1 60); do
+            run_id="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?event=push&head_sha=${TARGET_SHA}" --jq '.workflow_runs | sort_by(.created_at) | reverse | .[0].id // empty')"
+
+            if [ -z "$run_id" ]; then
+              echo "No CI run found yet for ${TARGET_SHA}. Waiting..."
+              sleep 10
+              continue
+            fi
+
+            status="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.status')"
+            conclusion="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}" --jq '.conclusion // empty')"
+
+            echo "CI run ${run_id}: status=${status} conclusion=${conclusion}"
+
+            if [ "$status" = "completed" ] && [ "$conclusion" = "success" ]; then
+              echo "ci_run_id=${run_id}" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            if [ "$status" = "completed" ]; then
+              echo "CI did not succeed for ${TARGET_SHA}."
+              exit 1
+            fi
+
+            sleep 10
+          done
+
+          echo "Timed out waiting for CI to succeed for ${TARGET_SHA}."
+          exit 1
+
   build-n-publish:
     name: Build and publish to PyPI
+    needs: wait-for-ci
     runs-on: ubuntu-latest
     environment:
       name: pypi
