@@ -75,6 +75,14 @@ jobs:
       - name: Build distributions
         run: uv build
 
+      - name: Verify built wheel in a clean virtual environment
+        run: |
+          python -m venv .publish-venv
+          . .publish-venv/bin/activate
+          pip install dist/*.whl
+          python -c "import zen_prompt.cli"
+          zen-prompt --version
+
       - name: Publish package distributions to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
