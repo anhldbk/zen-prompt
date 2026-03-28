@@ -83,11 +83,17 @@ Below is an example of a quote with a custom photo
 
 ### Crawling Later
 
-Start crawling quotes for specific tags. The default tags are `inspirational,motivational,buddhism`.
+Build data in stages. The default tags are `inspirational,motivational,buddhism`.
 
 ```bash
-# Basic crawl
+# 1. Crawl raw quotes
 zen-prompt crawl --tags inspirational,life
+
+# 2. Distill raw quotes into a curated database
+zen-prompt distill
+
+# 3. Export runtime assets used by random/search/get/stat
+zen-prompt export --output-dir ./docs --small-limit 500
 
 # Crawl from a specific Goodreads URL (author, book, etc.)
 zen-prompt crawl --url https://www.goodreads.com/author/zen-prompt/123.Author_Name
@@ -96,7 +102,12 @@ zen-prompt crawl --url https://www.goodreads.com/author/zen-prompt/123.Author_Na
 zen-prompt crawl --download-delay 2.0
 ```
 
-The crawler will save quotes to `docs/data/sqlite/quotes.db` by default and display real-time progress.
+By default:
+- `crawl` writes `docs/data/sqlite/quotes-raw.db`
+- `distill` writes `docs/data/sqlite/quotes-distilled.db`
+- `export` publishes runtime assets including `docs/data/sqlite/quotes.db`
+
+Package builds only bundle the small runtime database. To fetch the large runtime database after install, run `zen-prompt sync`.
 
 ### Quote Statistics Later
 
