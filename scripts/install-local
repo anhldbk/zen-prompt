@@ -1,0 +1,7 @@
+#!/bin/bash
+
+uv build
+
+# grab the latest wheel file from dist
+WHEEL_FILE=$(ls dist/*.whl | tail -n 1)
+pipx install --force "$WHEEL_FILE"
