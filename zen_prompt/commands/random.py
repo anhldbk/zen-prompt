@@ -312,6 +312,16 @@ def random(
             max_words=quote_max_words,
             max_chars=quote_max_chars,
         )
+        if not quote:
+            quote = get_random_quote(
+                conn,
+                tags=tag,
+                authors=author,
+                min_likes=min_likes,
+                max_words=quote_max_words,
+                max_chars=quote_max_chars,
+                exclude_recent_history=False,
+            )
         if quote:
             if photo and photo_layout == "table":
                 _render_photo_table_layout(

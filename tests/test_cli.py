@@ -354,6 +354,41 @@ def test_random_disables_photo_when_stdout_is_not_tty():
     mock_table_layout.assert_not_called()
 
 
+def test_random_retries_without_history_filter_when_recent_history_exhausts_db(
+    tmp_path,
+):
+    working_dir = tmp_path / "data/sqlite"
+    os.makedirs(working_dir)
+    db_path = working_dir / "quotes.db"
+
+    with (
+        patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
+        patch("zen_prompt.commands.random.connect_db"),
+        patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
+        patch("zen_prompt.commands.random.render_photo") as mock_render_photo,
+    ):
+        mock_get_db.return_value = str(db_path)
+        mock_get_random.side_effect = [
+            None,
+            {
+                "id": 1,
+                "text": "Recovered quote",
+                "author": "Author",
+                "book_title": "Book",
+                "tags": ["tag1"],
+            },
+        ]
+
+        result = runner.invoke(
+            app, ["random", "--no-photo", "--working-dir", str(working_dir)]
+        )
+
+    assert result.exit_code == 0
+    assert "Recovered quote" in result.stdout
+    assert mock_get_random.call_args_list[1].kwargs["exclude_recent_history"] is False
+    mock_render_photo.assert_not_called()
+
+
 def test_random_passes_quote_length_filters(tmp_path):
     working_dir = tmp_path / "data/sqlite"
     os.makedirs(working_dir)

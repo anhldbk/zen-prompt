@@ -146,18 +146,22 @@ def _build_random_quote_filters(
     min_likes: int = 0,
     max_words: Optional[int] = None,
     max_chars: Optional[int] = None,
+    exclude_recent_history: bool = True,
 ):
-    where_clauses = [
-        """
-        NOT EXISTS (
-            SELECT 1
-            FROM history h
-            WHERE h.quote_id = q.id
-              AND h.shown_at >= datetime('now', '-7 days')
-        )
-        """
-    ]
+    where_clauses = []
     params: list[object] = []
+
+    if exclude_recent_history:
+        where_clauses.append(
+            """
+            NOT EXISTS (
+                SELECT 1
+                FROM history h
+                WHERE h.quote_id = q.id
+                  AND h.shown_at >= datetime('now', '-7 days')
+            )
+            """
+        )
 
     if min_likes > 0:
         where_clauses.append("q.likes >= ?")
@@ -244,6 +248,7 @@ def get_random_quote(
     min_likes: int = 0,
     max_words: Optional[int] = None,
     max_chars: Optional[int] = None,
+    exclude_recent_history: bool = True,
 ):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -253,6 +258,7 @@ def get_random_quote(
         min_likes=min_likes,
         max_words=max_words,
         max_chars=max_chars,
+        exclude_recent_history=exclude_recent_history,
     )
 
     bounds = cursor.execute(
