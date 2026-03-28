@@ -1,0 +1,13 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        entry: /bin/zsh -lc 'UV_CACHE_DIR=/tmp/uv-cache uv run ruff check .'
+        language: system
+        pass_filenames: false
+      - id: ruff-format
+        name: ruff format
+        entry: /bin/zsh -lc 'UV_CACHE_DIR=/tmp/uv-cache uv run ruff format --check .'
+        language: system
+        pass_filenames: false

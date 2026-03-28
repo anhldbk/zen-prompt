@@ -49,6 +49,16 @@ pip install "zen-prompt[all]"
 
 The `all` extra adds the crawler stack used by `zen-prompt crawl`.
 
+For local development installs with `pipx`, use the helper script:
+
+```bash
+# Lightweight install
+scripts/install-local
+
+# Full install with crawl support
+scripts/install-local full
+```
+
 
 ## Usage
 
@@ -164,13 +174,37 @@ zen-prompt sync https://anhldbk.github.io/zen-prompt/data/
 zen-prompt search "success and happiness" --limit 3
 ```
 
+## Development
+
+Install dev tools and the full local verification stack with:
+
+```bash
+uv sync --group dev
+```
+
+Install the git hook:
+
+```bash
+uv run pre-commit install
+```
+
+Run the standard local verification flow:
+
+```bash
+scripts/check
+```
+
+This runs:
+
+- `uv run pre-commit run --all-files`
+- `uv run python -m pytest`
+
 ## Testing
 
 Run the full suite of unit and integration tests:
 
 ```bash
-export PYTHONPATH=$PYTHONPATH:. 
-uv run pytest
+uv run python -m pytest
 ```
 
 ## Project Structure

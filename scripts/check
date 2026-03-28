@@ -1,0 +1,7 @@
+#!/bin/bash
+set -euo pipefail
+
+export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"
+
+uv run pre-commit run --all-files
+uv run python -m pytest

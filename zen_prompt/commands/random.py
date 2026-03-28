@@ -201,22 +201,38 @@ def random(
     if profile_name:
         if profile_name in config.profiles:
             p_data = config.profiles[profile_name]
+
             # Override only if not provided by user
             def is_provided(name):
-                return ctx.get_parameter_source(name) == click.core.ParameterSource.COMMANDLINE
+                return (
+                    ctx.get_parameter_source(name)
+                    == click.core.ParameterSource.COMMANDLINE
+                )
 
-            if not is_provided("tag"): tag = p_data.tag
-            if not is_provided("author"): author = p_data.author
-            if not is_provided("min_likes"): min_likes = p_data.min_likes
-            if not is_provided("quote_max_words"): quote_max_words = p_data.quote_max_words
-            if not is_provided("quote_max_chars"): quote_max_chars = p_data.quote_max_chars
-            if not is_provided("quote_width"): quote_width = p_data.quote_width
-            if not is_provided("photo"): photo = p_data.photo
-            if not is_provided("no_photo"): no_photo = p_data.no_photo
-            if not is_provided("photo_layout"): photo_layout = p_data.photo_layout
-            if not is_provided("image_max_height"): image_max_height = p_data.image_max_height
-            if not is_provided("image_max_width"): image_max_width = p_data.image_max_width
-            if not is_provided("verbose"): verbose = p_data.verbose
+            if not is_provided("tag"):
+                tag = p_data.tag
+            if not is_provided("author"):
+                author = p_data.author
+            if not is_provided("min_likes"):
+                min_likes = p_data.min_likes
+            if not is_provided("quote_max_words"):
+                quote_max_words = p_data.quote_max_words
+            if not is_provided("quote_max_chars"):
+                quote_max_chars = p_data.quote_max_chars
+            if not is_provided("quote_width"):
+                quote_width = p_data.quote_width
+            if not is_provided("photo"):
+                photo = p_data.photo
+            if not is_provided("no_photo"):
+                no_photo = p_data.no_photo
+            if not is_provided("photo_layout"):
+                photo_layout = p_data.photo_layout
+            if not is_provided("image_max_height"):
+                image_max_height = p_data.image_max_height
+            if not is_provided("image_max_width"):
+                image_max_width = p_data.image_max_width
+            if not is_provided("verbose"):
+                verbose = p_data.verbose
         elif profile:
             typer.echo(f"Error: Profile '{profile}' not found.", err=True)
             raise typer.Exit(code=1)

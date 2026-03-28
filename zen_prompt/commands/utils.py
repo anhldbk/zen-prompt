@@ -3,10 +3,12 @@ import json
 import sqlite3
 import shutil
 import importlib.resources
+from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any
 
 from zen_prompt.db import ensure_runtime_db
+from zen_prompt.models import ProfileConfig
 
 RAW_DB_FILENAME = "quotes-raw.db"
 DISTILLED_DB_FILENAME = "quotes-distilled.db"
@@ -130,10 +132,6 @@ def save_manifest(manifest_path: str, manifest: Dict[str, Any]):
     os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
-
-
-from pathlib import Path
-from zen_prompt.models import ProfileConfig
 
 
 def get_profile_config_path() -> Path:

@@ -133,7 +133,9 @@ def delete(name: str = typer.Argument(..., help="Name of the profile to delete")
 
 
 @app.command()
-def default(name: str = typer.Argument(..., help="Name of the profile to set as default")):
+def default(
+    name: str = typer.Argument(..., help="Name of the profile to set as default"),
+):
     """
     Set a specific profile to be used automatically.
     """

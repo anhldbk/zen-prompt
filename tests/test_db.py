@@ -106,6 +106,7 @@ def test_crawl_state(db_conn):
 
 def test_photo_rotation_state(db_conn):
     from zen_prompt.db import get_rotation_state, update_rotation_state
+
     folder_path = "/path/to/photos"
     assert get_rotation_state(db_conn, folder_path) is None
 

@@ -86,9 +86,9 @@ def test_crawl_command_creates_dir(tmp_path):
 def test_crawl_command_explains_missing_all_extra(tmp_path):
     working_dir = tmp_path / "test_data"
 
-    with patch(
-        "zen_prompt.commands.crawl._load_crawler_process",
-        side_effect=ModuleNotFoundError("scrapy"),
+    with patch.dict(
+        app.registered_commands[0].callback.__globals__,
+        {"_load_crawler_process": MagicMock(side_effect=ModuleNotFoundError("scrapy"))},
     ):
         result = runner.invoke(
             app, ["crawl", "--working-dir", str(working_dir), "--tags", "test"]

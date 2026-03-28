@@ -1,9 +1,8 @@
 import os
-import shutil
 import tempfile
 from unittest.mock import patch, MagicMock
-import pytest
 from zen_prompt.commands.utils import get_cached_db
+
 
 def test_get_cached_db_provisions_when_missing():
     """
@@ -12,14 +11,18 @@ def test_get_cached_db_provisions_when_missing():
     """
     with tempfile.TemporaryDirectory() as tmp_dir:
         # Mocking importlib.resources to return a dummy bundled db path
-        with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as dummy_bundled_db:
+        with tempfile.NamedTemporaryFile(
+            suffix=".db", delete=False
+        ) as dummy_bundled_db:
             dummy_bundled_db.write(b"dummy database content")
             dummy_bundled_db_path = dummy_bundled_db.name
 
         try:
             # We need to mock importlib.resources.files and as_file
-            with patch("importlib.resources.files") as mock_files, \
-                 patch("importlib.resources.as_file") as mock_as_file:
+            with (
+                patch("importlib.resources.files") as mock_files,
+                patch("importlib.resources.as_file") as mock_as_file,
+            ):
                 mock_resource = MagicMock()
                 mock_resource.joinpath.return_value.is_file.return_value = True
                 mock_files.return_value = mock_resource
@@ -45,6 +48,7 @@ def test_get_cached_db_provisions_when_missing():
         finally:
             if os.path.exists(dummy_bundled_db_path):
                 os.unlink(dummy_bundled_db_path)
+
 
 def test_get_cached_db_returns_existing_when_present():
     """

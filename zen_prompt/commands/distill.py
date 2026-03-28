@@ -55,7 +55,9 @@ def distill(
     distilled_db_path = utils.get_distilled_db_path(working_dir)
 
     if not os.path.exists(raw_db_path):
-        typer.secho("❌ Raw database not found. Run 'crawl' first.", fg=typer.colors.RED)
+        typer.secho(
+            "❌ Raw database not found. Run 'crawl' first.", fg=typer.colors.RED
+        )
         raise typer.Exit(1)
 
     if not force:
