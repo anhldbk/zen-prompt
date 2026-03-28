@@ -4,7 +4,12 @@ import csv
 import sqlite3
 import typer
 from zen_prompt.db import get_all_quotes, optimize_db, create_subset_db
-from zen_prompt.commands.utils import get_manifest, save_manifest, generate_calver
+from zen_prompt.commands.utils import (
+    generate_calver,
+    get_distilled_db_path,
+    get_manifest,
+    save_manifest,
+)
 
 
 def export(
@@ -32,10 +37,10 @@ def export(
     This command optimizes the main database, creates a small subset, and
     exports everything to the 'data' directory within the target output.
     """
-    db_path = os.path.abspath(os.path.join(working_dir, "quotes.db"))
+    db_path = get_distilled_db_path(working_dir)
     if not os.path.exists(db_path):
         typer.echo(
-            f"Error: Source database not found at {db_path}. Run 'crawl' first.",
+            f"Error: Distilled database not found at {db_path}. Run 'distill' first.",
             err=True,
         )
         raise typer.Exit(code=1)

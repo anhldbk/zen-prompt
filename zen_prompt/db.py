@@ -2,6 +2,8 @@ import os
 import sqlite3
 import json
 import logging
+import random
+import shutil
 import unicodedata
 from datetime import datetime, timedelta
 from typing import List, Optional
@@ -29,7 +31,7 @@ def strip_diacritics(s: str) -> str:
     )
 
 
-def init_db(db_path: str):
+def init_db(db_path: str, *, backfill_lengths: bool = True):
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
@@ -62,20 +64,21 @@ def init_db(db_path: str):
     if "word_count" not in columns:
         cursor.execute("ALTER TABLE quotes ADD COLUMN word_count INTEGER")
 
-    cursor.execute(
-        """
-        UPDATE quotes
-        SET
-            char_count = LENGTH(text),
-            word_count = CASE
-                WHEN LENGTH(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' '))) = 0 THEN 0
-                ELSE LENGTH(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' ')))
-                    - LENGTH(REPLACE(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' ')), ' ', ''))
-                    + 1
-            END
-        WHERE char_count IS NULL OR word_count IS NULL
-        """
-    )
+    if backfill_lengths:
+        cursor.execute(
+            """
+            UPDATE quotes
+            SET
+                char_count = LENGTH(text),
+                word_count = CASE
+                    WHEN LENGTH(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' '))) = 0 THEN 0
+                    ELSE LENGTH(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' ')))
+                        - LENGTH(REPLACE(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' ')), ' ', ''))
+                        + 1
+                END
+            WHERE char_count IS NULL OR word_count IS NULL
+            """
+        )
 
     # Crawl state table with updated_at timestamp
     cursor.execute("""
@@ -103,41 +106,69 @@ def init_db(db_path: str):
         )
     """)
 
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_quotes_likes ON quotes(likes)")
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_quotes_word_count ON quotes(word_count)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_quotes_char_count ON quotes(char_count)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_history_quote_shown_at ON history(quote_id, shown_at)"
+    )
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_history_shown_at_quote ON history(shown_at, quote_id)"
+    )
+
     conn.commit()
     conn.close()
 
 
-def get_random_quote(
-    conn: sqlite3.Connection,
+def connect_db(db_path: str) -> sqlite3.Connection:
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute("PRAGMA journal_mode = WAL")
+    cursor.execute("PRAGMA synchronous = NORMAL")
+    cursor.execute("PRAGMA temp_store = MEMORY")
+    cursor.execute("PRAGMA cache_size = -20000")
+    return conn
+
+
+def ensure_runtime_db(db_path: str):
+    # Avoid the full backfill scan on latency-sensitive read paths.
+    init_db(db_path, backfill_lengths=False)
+
+
+def _build_random_quote_filters(
     tags: Optional[List[str]] = None,
     authors: Optional[List[str]] = None,
     min_likes: int = 0,
     max_words: Optional[int] = None,
     max_chars: Optional[int] = None,
 ):
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-
-    # Base query with history exclusion (quotes not shown in the last 7 days)
-    query = """
-        SELECT q.id, q.text, q.author, q.book_title, q.tags, q.likes, q.link 
-        FROM quotes q
-        LEFT JOIN history h ON q.id = h.quote_id AND h.shown_at >= datetime('now', '-7 days')
-        WHERE h.quote_id IS NULL
-    """
-    all_conditions = []
-    params = []
+    where_clauses = [
+        """
+        NOT EXISTS (
+            SELECT 1
+            FROM history h
+            WHERE h.quote_id = q.id
+              AND h.shown_at >= datetime('now', '-7 days')
+        )
+        """
+    ]
+    params: list[object] = []
 
     if min_likes > 0:
-        all_conditions.append("q.likes >= ?")
+        where_clauses.append("q.likes >= ?")
         params.append(min_likes)
 
     if max_words is not None:
-        all_conditions.append("q.word_count <= ?")
+        where_clauses.append("q.word_count <= ?")
         params.append(max_words)
 
     if max_chars is not None:
-        all_conditions.append("q.char_count <= ?")
+        where_clauses.append("q.char_count <= ?")
         params.append(max_chars)
 
     if tags:
@@ -145,9 +176,7 @@ def get_random_quote(
         for tag in tags:
             tag = tag.lower()
             if "*" in tag or "?" in tag:
-                # Map wildcards to SQL equivalents
                 tag_pattern = tag.replace("*", "%").replace("?", "_")
-                # Ensure it matches within the JSON array structure if quotes are not provided
                 if '"' not in tag_pattern:
                     if not tag_pattern.startswith("%"):
                         tag_pattern = "%" + '"' + tag_pattern
@@ -159,7 +188,7 @@ def get_random_quote(
                 tag_conditions.append("LOWER(q.tags) LIKE ?")
                 params.append(f'%"{tag}"%')
         if tag_conditions:
-            all_conditions.append("(" + " OR ".join(tag_conditions) + ")")
+            where_clauses.append("(" + " OR ".join(tag_conditions) + ")")
 
     if authors:
         author_conditions = []
@@ -173,15 +202,91 @@ def get_random_quote(
                 author_conditions.append("LOWER(q.author) LIKE ?")
                 params.append(f"%{author_lower}%")
         if author_conditions:
-            all_conditions.append("(" + " OR ".join(author_conditions) + ")")
+            where_clauses.append("(" + " OR ".join(author_conditions) + ")")
 
-    if all_conditions:
-        query += " AND " + " AND ".join(all_conditions)
+    return " AND ".join(where_clauses), params
 
-    # Simplified query with ORDER BY RANDOM()
-    query += " ORDER BY RANDOM() LIMIT 1"
 
-    row = cursor.execute(query, params).fetchone()
+def _fetch_random_quote_row(
+    cursor: sqlite3.Cursor,
+    where_clause: str,
+    params: list[object],
+    pivot: int,
+):
+    select_columns = """
+        q.id, q.text, q.author, q.book_title, q.tags, q.likes, q.link
+    """
+    forward_query = f"""
+        SELECT {select_columns}
+        FROM quotes q
+        WHERE q.id >= ? AND {where_clause}
+        ORDER BY q.id
+        LIMIT 1
+    """
+    row = cursor.execute(forward_query, [pivot, *params]).fetchone()
+    if row:
+        return row
+
+    wrap_query = f"""
+        SELECT {select_columns}
+        FROM quotes q
+        WHERE q.id < ? AND {where_clause}
+        ORDER BY q.id
+        LIMIT 1
+    """
+    return cursor.execute(wrap_query, [pivot, *params]).fetchone()
+
+
+def get_random_quote(
+    conn: sqlite3.Connection,
+    tags: Optional[List[str]] = None,
+    authors: Optional[List[str]] = None,
+    min_likes: int = 0,
+    max_words: Optional[int] = None,
+    max_chars: Optional[int] = None,
+):
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    where_clause, params = _build_random_quote_filters(
+        tags=tags,
+        authors=authors,
+        min_likes=min_likes,
+        max_words=max_words,
+        max_chars=max_chars,
+    )
+
+    bounds = cursor.execute(
+        f"""
+        SELECT MIN(q.id) AS min_id, MAX(q.id) AS max_id
+        FROM quotes q
+        WHERE {where_clause}
+        """,
+        params,
+    ).fetchone()
+    if not bounds or bounds["min_id"] is None or bounds["max_id"] is None:
+        return None
+
+    min_id = bounds["min_id"]
+    max_id = bounds["max_id"]
+    attempts = min(16, max(4, max_id - min_id + 1))
+    row = None
+    for _ in range(attempts):
+        pivot = random.randint(min_id, max_id)
+        row = _fetch_random_quote_row(cursor, where_clause, params, pivot)
+        if row:
+            break
+
+    if not row:
+        row = cursor.execute(
+            f"""
+            SELECT q.id, q.text, q.author, q.book_title, q.tags, q.likes, q.link
+            FROM quotes q
+            WHERE {where_clause}
+            ORDER BY q.id
+            LIMIT 1
+            """,
+            params,
+        ).fetchone()
     if not row:
         return None
 
@@ -812,6 +917,11 @@ def optimize_db(db_path: str):
     # Vacuum to minimize file size
     cursor.execute("VACUUM")
     conn.close()
+
+
+def copy_database(source_db: str, target_db: str):
+    os.makedirs(os.path.dirname(target_db), exist_ok=True)
+    shutil.copy2(source_db, target_db)
 
 
 def create_subset_db(

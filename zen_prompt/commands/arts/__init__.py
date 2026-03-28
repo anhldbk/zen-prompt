@@ -34,6 +34,22 @@ def get_random_photo_for_topic(photo_topic: str = DEFAULT_PHOTO_TOPIC) -> Path:
     return random.choice(_get_topic_image_paths(photo_topic))
 
 
+def get_folder_image_paths(folder_path: str | Path) -> list[Path]:
+    folder = Path(folder_path).expanduser()
+    if not folder.is_dir():
+        raise ValueError(f"Photo folder not found: {folder}")
+
+    image_paths = sorted(
+        path
+        for path in folder.iterdir()
+        if path.is_file() and path.suffix.lower() in SUPPORTED_PHOTO_EXTENSIONS
+    )
+    if not image_paths:
+        raise ValueError(f"No image files found in photo folder: {folder}")
+
+    return image_paths
+
+
 def get_photo_topic(photo: str) -> str:
     if photo.startswith("topic@"):
         return photo[6:]
@@ -83,7 +99,16 @@ def validate_photo_mode(photo: str) -> str:
             raise ValueError(f"Photo file not found: {image_path}")
         return f"file@{image_path}"
 
-    raise ValueError("Photo mode must be one of: empty, topic@<name>, file@<path>")
+    if photo.startswith("folder@"):
+        folder_path = photo[7:]
+        if not folder_path:
+            raise ValueError("Photo folder cannot be empty")
+        get_folder_image_paths(folder_path)
+        return f"folder@{Path(folder_path).expanduser()}"
+
+    raise ValueError(
+        "Photo mode must be one of: empty, topic@<name>, file@<path>, folder@<path>"
+    )
 
 
 def _prepare_terminal_image(source_image):

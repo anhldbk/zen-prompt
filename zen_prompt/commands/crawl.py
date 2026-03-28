@@ -1,9 +1,8 @@
 import os
 import typer
 from typing import Optional
-from scrapy.crawler import CrawlerProcess
-from zen_prompt.spider import GoodreadsQuotesSpider
 from zen_prompt.db import init_db
+from zen_prompt.commands.utils import get_raw_db_path
 
 
 def crawl(
@@ -26,6 +25,10 @@ def crawl(
     """
     Run the Goodreads quotes crawler and store results in SQLite.
     """
+    from scrapy.crawler import CrawlerProcess
+
+    from zen_prompt.spider import GoodreadsQuotesSpider
+
     # If no tags or url provided, use default tags
     if not tags and not url:
         tags = "inspirational,motivational,buddhism"
@@ -34,8 +37,8 @@ def crawl(
     if not os.path.exists(working_dir):
         os.makedirs(working_dir, exist_ok=True)
 
-    db_path = os.path.abspath(os.path.join(working_dir, "quotes.db"))
-    typer.echo(f"Initializing database at {db_path}...")
+    db_path = get_raw_db_path(working_dir)
+    typer.echo(f"Initializing raw database at {db_path}...")
     init_db(db_path)
 
     # Configure Scrapy settings

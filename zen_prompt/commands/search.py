@@ -8,7 +8,7 @@ def search(
     query: str = typer.Argument(..., help="Search query"),
     limit: int = typer.Option(5, "--limit", "-l", help="Number of results to show"),
     working_dir: str = typer.Option(
-        "docs/data/sqlite",
+        "docs/data",
         "--working-dir",
         "-w",
         help="Working directory for local cache",
@@ -19,7 +19,10 @@ def search(
     """
     db_path = get_cached_db(working_dir)
     if not db_path:
-        typer.echo("Error: No cached database found. Run 'sync' first.", err=True)
+        typer.echo(
+            "Error: No runtime database found. Run 'sync' first or 'export' to create one.",
+            err=True,
+        )
         raise typer.Exit(code=1)
 
     conn = sqlite3.connect(db_path)

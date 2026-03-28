@@ -1,8 +1,18 @@
 import os
 import re
+import sys
+import importlib
+import inspect
 from PIL import Image as PILImage
 from typer.testing import CliRunner
 from zen_prompt.cli import app
+from zen_prompt.commands.get import get as get_command
+from zen_prompt.commands.history import clear_history as history_clear_command
+from zen_prompt.commands.history import history_stat as history_stat_command
+from zen_prompt.commands.history import list_history as history_list_command
+from zen_prompt.commands.random import random as random_command
+from zen_prompt.commands.search import search as search_command
+from zen_prompt.commands.stat import stat as stat_command
 from unittest.mock import patch, MagicMock, ANY
 
 runner = CliRunner()
@@ -23,10 +33,48 @@ def test_root_help_uses_refined_cli_contract():
     assert "--help" in stdout
 
 
+def test_crawl_module_defers_scrapy_import():
+    for module_name in list(sys.modules):
+        if module_name == "zen_prompt.commands.crawl" or module_name.startswith(
+            ("scrapy", "twisted")
+        ):
+            sys.modules.pop(module_name, None)
+
+    importlib.import_module("zen_prompt.commands.crawl")
+
+    assert "scrapy" not in sys.modules
+    assert "twisted" not in sys.modules
+
+
+def test_stat_module_defers_rich_markdown_import():
+    for module_name in ["zen_prompt.commands.stat", "rich.markdown"]:
+        sys.modules.pop(module_name, None)
+
+    importlib.import_module("zen_prompt.commands.stat")
+
+    assert "rich.markdown" not in sys.modules
+
+
+def test_runtime_commands_default_to_data_root_working_dir():
+    commands = [
+        random_command,
+        search_command,
+        get_command,
+        stat_command,
+        history_list_command,
+        history_clear_command,
+        history_stat_command,
+    ]
+
+    for command in commands:
+        working_dir = inspect.signature(command).parameters["working_dir"].default
+        assert working_dir.default == "docs/data"
+
+
 def test_crawl_command_creates_dir(tmp_path):
     working_dir = tmp_path / "test_data"
     # Mocking CrawlerProcess to avoid live crawl
-    with patch("zen_prompt.commands.crawl.CrawlerProcess"):
+    with patch("scrapy.crawler.CrawlerProcess"):
         result = runner.invoke(
             app, ["crawl", "--working-dir", str(working_dir), "--tags", "test"]
         )
@@ -72,13 +120,13 @@ def test_export_command_missing_db(tmp_path):
     # Check stderr for the error message
     result = runner.invoke(app, ["export", "--working-dir", str(working_dir)])
     assert result.exit_code == 1
-    assert "Source database not found" in result.stderr
+    assert "Distilled database not found" in result.stderr
 
 
 def test_export_with_mock_db(tmp_path):
     working_dir = tmp_path / "data/sqlite"
     os.makedirs(working_dir)
-    db_path = working_dir / "quotes.db"
+    db_path = working_dir / "quotes-distilled.db"
     # Create an empty db file to pass the existence check
     open(db_path, "a").close()
 
@@ -115,7 +163,7 @@ def test_random_command(tmp_path):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
         patch("zen_prompt.commands.random.render_photo") as mock_render_photo,
     ):
@@ -155,7 +203,7 @@ def test_random_passes_quote_length_filters(tmp_path):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
     ):
         mock_get_db.return_value = str(db_path)
@@ -198,7 +246,7 @@ def test_random_wraps_long_quote_with_quote_width(tmp_path):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
     ):
         mock_get_db.return_value = str(db_path)
@@ -234,7 +282,7 @@ def test_random_wraps_long_attribution_with_quote_width(tmp_path):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
     ):
         mock_get_db.return_value = str(db_path)
@@ -441,16 +489,17 @@ def test_distill_rejects_removed_filter_aliases(tmp_path):
 def test_distill_command(tmp_path):
     working_dir = tmp_path / "data/sqlite"
     os.makedirs(working_dir)
-    db_path = working_dir / "quotes.db"
+    raw_db_path = working_dir / "quotes-raw.db"
+    raw_db_path.write_text("db")
+    distilled_db_path = working_dir / "quotes-distilled.db"
 
     with (
-        patch("zen_prompt.commands.distill.utils.get_cached_db") as mock_get_db,
+        patch("zen_prompt.commands.distill.db.copy_database") as mock_copy_database,
         patch("zen_prompt.commands.distill.db.init_db") as mock_init_db,
         patch("zen_prompt.commands.distill.sqlite3.connect") as mock_connect,
         patch("zen_prompt.commands.distill.db.distill_quotes") as mock_distill,
         patch("zen_prompt.commands.distill.db.repopulate_fts"),
     ):
-        mock_get_db.return_value = str(db_path)
         mock_distill.return_value = (5, 0)
 
         # Test with force to avoid confirmation
@@ -473,7 +522,10 @@ def test_distill_command(tmp_path):
         assert "Successfully removed 5 quotes" in result.stdout
         assert "Rebuilding search index" in result.stdout
         assert "VACUUM" in result.stdout
-        mock_init_db.assert_called_once_with(str(db_path))
+        mock_copy_database.assert_called_once_with(
+            str(raw_db_path), str(distilled_db_path)
+        )
+        mock_init_db.assert_called_once_with(str(distilled_db_path))
 
         mock_distill.assert_called_with(
             mock_connect.return_value,
@@ -533,7 +585,7 @@ def test_random_with_topic_photo_option(tmp_path):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
         patch("zen_prompt.commands.random.render_photo") as mock_render_photo,
     ):
@@ -577,7 +629,7 @@ def test_random_with_table_photo_layout(tmp_path):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
         patch(
             "zen_prompt.commands.random._render_photo_table_layout"
@@ -631,7 +683,7 @@ def test_random_with_file_photo_option(tmp_path):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
         patch("zen_prompt.commands.random.render_photo") as mock_render_photo,
     ):
@@ -695,7 +747,7 @@ def test_random_with_no_photo_option(tmp_path):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
         patch("zen_prompt.commands.random.render_photo") as mock_render_photo,
         patch(
@@ -727,7 +779,7 @@ def test_random_passes_topic_mode_to_renderer(tmp_path):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
         patch("zen_prompt.commands.random.render_photo") as mock_render_photo,
     ):
@@ -773,7 +825,7 @@ def test_random_uses_monochrome_photo_by_default(tmp_path):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
         patch(
             "zen_prompt.commands.random._render_photo_table_layout"

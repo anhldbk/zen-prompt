@@ -78,7 +78,7 @@ def test_random_with_profile(tmp_path, monkeypatch):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
     ):
         mock_get_db.return_value = str(db_path)
@@ -116,7 +116,7 @@ def test_random_profile_override(tmp_path, monkeypatch):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
     ):
         mock_get_db.return_value = str(db_path)
@@ -156,7 +156,7 @@ def test_random_default_profile(tmp_path, monkeypatch):
 
     with (
         patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
-        patch("zen_prompt.commands.random.sqlite3.connect"),
+        patch("zen_prompt.commands.random.connect_db"),
         patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
     ):
         mock_get_db.return_value = str(db_path)

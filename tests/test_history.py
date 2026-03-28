@@ -88,3 +88,33 @@ def test_get_random_quote_includes_id(db_conn):
     assert quote is not None
     assert "id" in quote
     assert isinstance(quote["id"], int)
+
+
+def test_get_random_quote_handles_sparse_ids(db_conn):
+    save_quote(db_conn, Quote(text="Quote 1", author="Author 1", tags=[], likes=10))
+    save_quote(db_conn, Quote(text="Quote 2", author="Author 2", tags=[], likes=10))
+    save_quote(db_conn, Quote(text="Quote 3", author="Author 3", tags=[], likes=10))
+
+    db_conn.execute("DELETE FROM quotes WHERE text = ?", ("Quote 2",))
+    db_conn.commit()
+
+    seen = set()
+    for _ in range(20):
+        quote = get_random_quote(db_conn)
+        assert quote is not None
+        seen.add(quote["text"])
+
+    assert seen == {"Quote 1", "Quote 3"}
+
+
+def test_get_random_quote_uses_wraparound_when_random_pivot_misses(db_conn, monkeypatch):
+    save_quote(db_conn, Quote(text="First", author="Author 1", tags=[], likes=10))
+    save_quote(db_conn, Quote(text="Second", author="Author 2", tags=[], likes=10))
+
+    monkeypatch.setattr("zen_prompt.db.random.randint", lambda _min_id, max_id: max_id)
+    db_conn.execute("DELETE FROM quotes WHERE text = ?", ("Second",))
+    db_conn.commit()
+
+    quote = get_random_quote(db_conn)
+    assert quote is not None
+    assert quote["text"] == "First"

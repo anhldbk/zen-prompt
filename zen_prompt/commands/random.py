@@ -1,11 +1,17 @@
-import sqlite3
 import textwrap
 import typer
 from typing import Optional, List
 from zen_prompt.commands.utils import get_cached_db
-from zen_prompt.db import get_random_quote, record_history, init_db
+from zen_prompt.db import (
+    connect_db,
+    get_random_quote,
+    get_rotation_state,
+    record_history,
+    update_rotation_state,
+)
 from zen_prompt.commands.arts import (
     DEFAULT_PHOTO_TOPIC,
+    get_folder_image_paths,
     get_photo_renderable,
     render_photo,
     validate_photo_mode,
@@ -51,6 +57,26 @@ def _build_quote_renderable(quote, verbose: bool, quote_width: int):
             lines.append(Text(f"  Link: {quote['link']}"))
 
     return Group(*lines)
+
+
+def _resolve_folder_photo(photo: str, conn) -> str:
+    if not photo.startswith("folder@"):
+        return photo
+
+    folder_path = photo[7:]
+    image_paths = get_folder_image_paths(folder_path)
+    last_file = get_rotation_state(conn, folder_path)
+
+    next_index = 0
+    if last_file:
+        for index, image_path in enumerate(image_paths):
+            if image_path.name == last_file:
+                next_index = (index + 1) % len(image_paths)
+                break
+
+    selected = image_paths[next_index]
+    update_rotation_state(conn, folder_path, selected.name)
+    return f"file@{selected}"
 
 
 def _render_photo_table_layout(
@@ -126,7 +152,7 @@ def random(
         f"topic@{DEFAULT_PHOTO_TOPIC}",
         "--photo",
         "-p",
-        help="Visual mode: topic@<name> or file@<path to image file>",
+        help="Visual mode: topic@<name>, file@<path>, or folder@<path>",
     ),
     no_photo: bool = typer.Option(
         False,
@@ -158,7 +184,7 @@ def random(
         None, "--profile", help="Use a saved profile for settings"
     ),
     working_dir: str = typer.Option(
-        "docs/data/sqlite",
+        "docs/data",
         "--working-dir",
         "-w",
         help="Working directory for local cache",
@@ -198,13 +224,10 @@ def random(
     db_path = get_cached_db(working_dir)
     if not db_path:
         typer.echo(
-            "Error: No cached database found. Run 'sync' first or 'crawl' to create one.",
+            "Error: No runtime database found. Run 'sync' first or 'export' to create one.",
             err=True,
         )
         raise typer.Exit(code=1)
-
-    # Ensure schema migrations are applied and history table exists
-    init_db(db_path)
 
     if no_photo:
         photo = ""
@@ -219,8 +242,9 @@ def random(
     except ValueError as exc:
         raise typer.BadParameter(str(exc), param_hint="--photo-layout") from exc
 
-    conn = sqlite3.connect(db_path)
+    conn = connect_db(db_path)
     try:
+        photo = _resolve_folder_photo(photo, conn)
         quote = get_random_quote(
             conn,
             tags=tag,

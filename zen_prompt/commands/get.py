@@ -10,7 +10,7 @@ def get(
         False, "--verbose", "-v", help="Display extra metadata like tags."
     ),
     working_dir: str = typer.Option(
-        "docs/data/sqlite",
+        "docs/data",
         "--working-dir",
         "-w",
         help="Working directory for local cache",

@@ -14,7 +14,7 @@ def list_history(
         10, "--limit", "-n", help="Number of recent quotes to show."
     ),
     working_dir: str = typer.Option(
-        "docs/data/sqlite",
+        "docs/data",
         "--working-dir",
         "-w",
         help="Working directory for the local cache",
@@ -62,7 +62,7 @@ def clear_history(
         False, "--force", "-f", help="Force clear without confirmation."
     ),
     working_dir: str = typer.Option(
-        "docs/data/sqlite",
+        "docs/data",
         "--working-dir",
         "-w",
         help="Working directory for the local cache",
@@ -93,7 +93,7 @@ def clear_history(
 @app.command("stat")
 def history_stat(
     working_dir: str = typer.Option(
-        "docs/data/sqlite",
+        "docs/data",
         "--working-dir",
         "-w",
         help="Working directory for the local cache",

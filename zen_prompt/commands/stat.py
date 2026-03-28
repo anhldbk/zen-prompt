@@ -1,8 +1,6 @@
 import sqlite3
 import typer
 from typing import Optional
-from rich.console import Console
-from rich.markdown import Markdown
 from zen_prompt import db
 from zen_prompt.commands import utils
 
@@ -12,7 +10,7 @@ def stat(
         None, "--output", "-o", help="Path to save the statistics as a Markdown file."
     ),
     working_dir: str = typer.Option(
-        "docs/data/sqlite",
+        "docs/data",
         "--working-dir",
         "-w",
         help="Working directory for the local cache",
@@ -21,11 +19,14 @@ def stat(
     """
     Generate statistics about the quote database.
     """
+    from rich.console import Console
+    from rich.markdown import Markdown
+
     db_path = utils.get_cached_db(working_dir)
 
     if not db_path:
         typer.secho(
-            "❌ Database not found. Please run 'sync' or 'crawl' first.",
+            "❌ Runtime database not found. Please run 'sync' or 'export' first.",
             fg=typer.colors.RED,
         )
         raise typer.Exit(1)

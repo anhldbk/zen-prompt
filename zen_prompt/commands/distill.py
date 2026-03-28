@@ -1,4 +1,5 @@
 import sqlite3
+import os
 import typer
 from zen_prompt import db
 from zen_prompt.commands import utils
@@ -48,19 +49,17 @@ def distill(
     ),
 ):
     """
-    Prune the database by removing low-quality quotes (e.g., empty ones).
+    Create a distilled database from the raw crawl database.
     """
-    db_path = utils.get_cached_db(working_dir)
+    raw_db_path = utils.get_raw_db_path(working_dir)
+    distilled_db_path = utils.get_distilled_db_path(working_dir)
 
-    if not db_path:
-        typer.secho("❌ Database not found.", fg=typer.colors.RED)
+    if not os.path.exists(raw_db_path):
+        typer.secho("❌ Raw database not found. Run 'crawl' first.", fg=typer.colors.RED)
         raise typer.Exit(1)
 
-    # Ensure schema migrations are applied before pruning older databases.
-    db.init_db(db_path)
-
     if not force:
-        msg = f"Distilling {db_path}:\n"
+        msg = f"Distilling {raw_db_path} -> {distilled_db_path}:\n"
         if min_length > 0:
             msg += f" - length < {min_length}\n"
         if min_words > 0:
@@ -77,7 +76,10 @@ def distill(
         if not typer.confirm(f"Are you sure you want to proceed?\n{msg}"):
             raise typer.Abort()
 
-    conn = sqlite3.connect(db_path)
+    db.copy_database(raw_db_path, distilled_db_path)
+    db.init_db(distilled_db_path)
+
+    conn = sqlite3.connect(distilled_db_path)
     try:
         removed, updated_authors = db.distill_quotes(
             conn,
@@ -87,6 +89,11 @@ def distill(
             remove_lowercase=remove_lowercase,
             remove_uppercase=remove_uppercase,
             normalize=normalize_authors,
+        )
+
+        typer.secho(
+            f"✨ Distilled database ready at {distilled_db_path}.",
+            fg=typer.colors.GREEN,
         )
 
         if removed > 0 or updated_authors > 0:
