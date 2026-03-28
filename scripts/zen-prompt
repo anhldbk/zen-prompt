@@ -1,4 +1,7 @@
 #!/bin/bash
 set -e
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-/tmp/uv-cache}"
-uv run zen-prompt "$@"
+cd "${REPO_ROOT}"
+exec uv run --no-sync zen-prompt "$@"

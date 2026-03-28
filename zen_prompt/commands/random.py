@@ -1,5 +1,6 @@
 import textwrap
 import typer
+import sys
 from typing import Optional, List
 from zen_prompt.commands.utils import get_cached_db
 from zen_prompt.db import (
@@ -39,17 +40,15 @@ def _build_quote_renderable(quote, verbose: bool, quote_width: int):
     from rich.console import Group
     from rich.text import Text
 
-    attribution = f"  -- {quote['author']}" + (
-        f" (from '{quote['book_title']}')" if quote["book_title"] else ""
-    )
+    lines = [Text(f'"{_wrap_text(quote["text"], quote_width)}"', style="bold white")]
 
-    lines = [
-        Text(f'"{_wrap_text(quote["text"], quote_width)}"', style="bold white"),
-        Text(""),
-        Text(_wrap_text(attribution, quote_width)),
-    ]
+    if quote.get("author"):
+        attribution = f"  -- {quote['author']}" + (
+            f" (from '{quote['book_title']}')" if quote.get("book_title") else ""
+        )
+        lines.extend([Text(""), Text(_wrap_text(attribution, quote_width))])
 
-    if verbose:
+    if verbose and quote.get("tags"):
         lines.append(Text(f"  Tags: {', '.join(quote['tags'])}"))
         if quote.get("likes"):
             lines.append(Text(f"  Likes: {quote['likes']}"))
@@ -111,6 +110,21 @@ def _render_photo_table_layout(
     console.print()
     console.print(table)
     console.print()
+
+
+def _read_piped_quote_text() -> str | None:
+    if sys.stdin.isatty():
+        return None
+
+    piped_text = sys.stdin.read().strip("\n")
+    if not piped_text.strip():
+        return None
+
+    return piped_text
+
+
+def _supports_terminal_graphics() -> bool:
+    return sys.stdout.isatty()
 
 
 def random(
@@ -196,6 +210,7 @@ def random(
     from zen_prompt.commands.utils import load_profile_config
     import click
 
+    piped_text = _read_piped_quote_text()
     config = load_profile_config()
     profile_name = profile or config.default_profile
     if profile_name:
@@ -237,15 +252,7 @@ def random(
             typer.echo(f"Error: Profile '{profile}' not found.", err=True)
             raise typer.Exit(code=1)
 
-    db_path = get_cached_db(working_dir)
-    if not db_path:
-        typer.echo(
-            "Error: No runtime database found. Run 'sync' first or 'export' to create one.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-
-    if no_photo:
+    if no_photo or not _supports_terminal_graphics():
         photo = ""
     else:
         try:
@@ -257,6 +264,42 @@ def random(
         photo_layout = validate_photo_layout(photo_layout)
     except ValueError as exc:
         raise typer.BadParameter(str(exc), param_hint="--photo-layout") from exc
+
+    if piped_text is not None:
+        quote = {"text": piped_text}
+        if photo and photo_layout == "table":
+            _render_photo_table_layout(
+                quote,
+                photo,
+                image_max_height=image_max_height,
+                image_max_width=image_max_width,
+                verbose=False,
+                quote_width=quote_width,
+            )
+        else:
+            if photo:
+                render_photo(
+                    photo,
+                    image_max_height=image_max_height,
+                    image_max_width=image_max_width,
+                )
+
+            typer.echo("")
+            typer.secho(
+                f'"{_wrap_text(quote["text"], quote_width)}"',
+                fg=typer.colors.WHITE,
+                bold=True,
+            )
+            typer.echo("")
+        return
+
+    db_path = get_cached_db(working_dir)
+    if not db_path:
+        typer.echo(
+            "Error: No runtime database found. Run 'sync' first or 'export' to create one.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
 
     conn = connect_db(db_path)
     try:

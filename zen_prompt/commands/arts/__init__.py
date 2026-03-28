@@ -1,6 +1,7 @@
 from __future__ import annotations
-
 import random
+import sys
+from contextlib import contextmanager
 from pathlib import Path
 
 ARTS_DIR = Path(__file__).resolve().parent
@@ -126,6 +127,34 @@ def _prepare_terminal_image(source_image):
     return source_image.convert("RGB")
 
 
+@contextmanager
+def _terminal_input_context():
+    if sys.__stdin__ is None or sys.__stdin__.isatty():
+        yield
+        return
+
+    try:
+        tty_stream = open("/dev/tty", "r")
+    except OSError:
+        yield
+        return
+
+    original_stdin = sys.__stdin__
+    try:
+        sys.__stdin__ = tty_stream
+        yield
+    finally:
+        sys.__stdin__ = original_stdin
+        tty_stream.close()
+
+
+def _get_textual_image():
+    with _terminal_input_context():
+        from textual_image.renderable import Image
+
+    return Image
+
+
 def get_photo_renderable(
     photo: str,
     image_max_height: int = 10,
@@ -138,7 +167,8 @@ def get_photo_renderable(
 
     from rich.console import Console
     from PIL import Image as PILImage
-    from textual_image.renderable import Image
+
+    Image = _get_textual_image()
 
     console = console or Console()
     max_width = image_max_width or console.width

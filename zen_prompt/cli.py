@@ -1,5 +1,7 @@
 import typer
 from typing import Optional
+import click
+from typer.main import get_command
 from zen_prompt import __version__
 from zen_prompt.commands import crawl as crawl_mod
 from zen_prompt.commands import export as export_mod
@@ -24,8 +26,9 @@ def version_callback(value: bool):
         raise typer.Exit()
 
 
-@app.callback()
+@app.callback(invoke_without_command=True)
 def main(
+    ctx: typer.Context,
     version: Optional[bool] = typer.Option(
         None,
         "--version",
@@ -38,7 +41,12 @@ def main(
     """
     Zen Prompt: Aesthetic inspiration for your shell.
     """
-    pass
+    if ctx.invoked_subcommand is None:
+        click_ctx = click.get_current_context()
+        click_app = get_command(app)
+        random_cmd = click_app.commands["random"]
+        sub_ctx = random_cmd.make_context("random", [], parent=click_ctx)
+        random_cmd.invoke(sub_ctx)
 
 
 # Register commands

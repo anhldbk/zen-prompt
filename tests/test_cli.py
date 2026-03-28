@@ -3,6 +3,7 @@ import re
 import sys
 import importlib
 import inspect
+import subprocess
 from PIL import Image as PILImage
 from typer.testing import CliRunner
 from zen_prompt.cli import app
@@ -31,6 +32,32 @@ def test_root_help_uses_refined_cli_contract():
     assert "Aesthetic inspiration for your shell" in stdout
     assert "-h" in stdout
     assert "--help" in stdout
+
+
+def test_root_without_subcommand_invokes_random_with_no_parameters(tmp_path):
+    working_dir = tmp_path / "data/sqlite"
+    os.makedirs(working_dir)
+    db_path = working_dir / "quotes.db"
+
+    with (
+        patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
+        patch("zen_prompt.commands.random.connect_db"),
+        patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
+    ):
+        mock_get_db.return_value = str(db_path)
+        mock_get_random.return_value = {
+            "id": 1,
+            "text": "Root quote",
+            "author": "Author",
+            "book_title": "Book",
+            "tags": ["tag1"],
+        }
+
+        result = runner.invoke(app, [])
+
+        assert result.exit_code == 0
+        assert "Root quote" in result.stdout
+        mock_get_random.assert_called_once()
 
 
 def test_crawl_module_defers_scrapy_import():
@@ -210,6 +237,121 @@ def test_random_command(tmp_path):
         assert "Random quote" in result.stdout
         assert "Tags: tag1" in result.stdout
         mock_render_photo.assert_not_called()
+
+
+def test_random_uses_piped_stdin_without_db_lookup():
+    with (
+        patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
+        patch("zen_prompt.commands.random.connect_db") as mock_connect_db,
+        patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
+        patch("zen_prompt.commands.random.record_history") as mock_record_history,
+    ):
+        result = runner.invoke(
+            app,
+            ["random", "--no-photo"],
+            input="Piped quote text\n",
+        )
+
+    assert result.exit_code == 0
+    assert "Piped quote text" in result.stdout
+    assert " -- " not in result.stdout
+    mock_get_db.assert_not_called()
+    mock_connect_db.assert_not_called()
+    mock_get_random.assert_not_called()
+    mock_record_history.assert_not_called()
+
+
+def test_root_uses_piped_stdin_without_db_lookup():
+    with (
+        patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
+        patch("zen_prompt.commands.random.connect_db") as mock_connect_db,
+        patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
+    ):
+        result = runner.invoke(
+            app,
+            [],
+            input="Root piped quote\n",
+        )
+
+    assert result.exit_code == 0
+    assert "Root piped quote" in result.stdout
+    mock_get_db.assert_not_called()
+    mock_connect_db.assert_not_called()
+    mock_get_random.assert_not_called()
+
+
+def test_wrapper_script_is_pipeable_outside_repo_root():
+    script_path = os.path.abspath("scripts/zen-prompt")
+    result = subprocess.run(
+        [script_path],
+        input="Wrapper piped quote\n",
+        text=True,
+        capture_output=True,
+        cwd="/tmp",
+        env={**os.environ, "UV_CACHE_DIR": "/tmp/uv-cache"},
+    )
+
+    assert result.returncode == 0
+    assert "Wrapper piped quote" in result.stdout
+    assert "Missing command" not in result.stderr
+
+
+def test_random_piped_stdin_ignores_db_selection_flags():
+    with (
+        patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
+        patch("zen_prompt.commands.random.connect_db") as mock_connect_db,
+        patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
+    ):
+        result = runner.invoke(
+            app,
+            [
+                "random",
+                "--no-photo",
+                "--tag",
+                "life",
+                "--author",
+                "Author",
+                "--quote-min-likes",
+                "100",
+            ],
+            input="Selected from stdin\n",
+        )
+
+    assert result.exit_code == 0
+    assert "Selected from stdin" in result.stdout
+    mock_get_db.assert_not_called()
+    mock_connect_db.assert_not_called()
+    mock_get_random.assert_not_called()
+
+
+def test_random_disables_photo_when_stdout_is_not_tty():
+    with (
+        patch(
+            "zen_prompt.commands.random._supports_terminal_graphics", return_value=False
+        ),
+        patch("zen_prompt.commands.random.get_cached_db") as mock_get_db,
+        patch("zen_prompt.commands.random.connect_db"),
+        patch("zen_prompt.commands.random.get_random_quote") as mock_get_random,
+        patch("zen_prompt.commands.random.render_photo") as mock_render_photo,
+        patch(
+            "zen_prompt.commands.random._render_photo_table_layout"
+        ) as mock_table_layout,
+    ):
+        mock_get_db.return_value = "docs/data/cache/quotes.db"
+        mock_get_random.return_value = {
+            "id": 1,
+            "text": "No tty quote",
+            "author": "Author",
+            "book_title": "Book",
+            "tags": ["tag1"],
+        }
+
+        result = runner.invoke(app, ["random"])
+
+    assert result.exit_code == 0
+    assert "No tty quote" in result.stdout
+    mock_render_photo.assert_not_called()
+    mock_table_layout.assert_not_called()
 
 
 def test_random_passes_quote_length_filters(tmp_path):

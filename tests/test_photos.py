@@ -1,9 +1,12 @@
 from unittest.mock import patch
+import io
+import sys
 
 from PIL import Image as PILImage
 
 from zen_prompt.commands.arts import (
     _fit_image_size,
+    _get_textual_image,
     _prepare_terminal_image,
     get_photo_topic,
     get_random_photo_for_topic,
@@ -125,3 +128,35 @@ def test_get_photo_topic_uses_default_for_image():
 
 def test_get_photo_topic_reads_topic_mode():
     assert get_photo_topic("topic@monochrome") == "monochrome"
+
+
+def test_get_textual_image_uses_dev_tty_when_stdin_is_piped():
+    original_stdin = sys.__stdin__
+
+    class FakePipe(io.StringIO):
+        def isatty(self):
+            return False
+
+    class FakeTty(io.StringIO):
+        def isatty(self):
+            return True
+
+    fake_pipe = FakePipe()
+    fake_tty = FakeTty()
+
+    with (
+        patch("builtins.open", return_value=fake_tty) as mock_open,
+        patch.dict(
+            "sys.modules",
+            {"textual_image.renderable": type("Module", (), {"Image": object})()},
+        ),
+    ):
+        sys.__stdin__ = fake_pipe
+        try:
+            image_cls = _get_textual_image()
+        finally:
+            sys.__stdin__ = original_stdin
+
+    assert image_cls is object
+    mock_open.assert_called_once_with("/dev/tty", "r")
+    assert sys.__stdin__ is original_stdin
