@@ -3,7 +3,7 @@ import textwrap
 import typer
 from typing import Optional, List
 from zen_prompt.commands.utils import get_cached_db
-from zen_prompt.db import get_random_quote, record_history
+from zen_prompt.db import get_random_quote, record_history, init_db
 from zen_prompt.commands.arts import (
     DEFAULT_PHOTO_TOPIC,
     get_photo_renderable,
@@ -202,6 +202,9 @@ def random(
             err=True,
         )
         raise typer.Exit(code=1)
+
+    # Ensure schema migrations are applied and history table exists
+    init_db(db_path)
 
     if no_photo:
         photo = ""

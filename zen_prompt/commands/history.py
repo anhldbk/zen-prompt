@@ -28,6 +28,9 @@ def list_history(
         typer.secho("❌ Database not found.", fg=typer.colors.RED)
         raise typer.Exit(1)
 
+    # Ensure all tables exist
+    db.init_db(db_path)
+
     conn = sqlite3.connect(db_path)
     try:
         history = db.get_history(conn, limit)
@@ -76,6 +79,9 @@ def clear_history(
         typer.secho("❌ Database not found.", fg=typer.colors.RED)
         raise typer.Exit(1)
 
+    # Ensure all tables exist
+    db.init_db(db_path)
+
     conn = sqlite3.connect(db_path)
     try:
         db.clear_history(conn)
@@ -100,6 +106,9 @@ def history_stat(
     if not db_path:
         typer.secho("❌ Database not found.", fg=typer.colors.RED)
         raise typer.Exit(1)
+
+    # Ensure all tables exist
+    db.init_db(db_path)
 
     conn = sqlite3.connect(db_path)
     try:
