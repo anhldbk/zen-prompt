@@ -22,3 +22,23 @@ class Quote(BaseModel):
 class CrawlState(BaseModel):
     tag_url: str
     last_page_processed: int
+
+
+class Profile(BaseModel):
+    tag: Optional[List[str]] = None
+    author: Optional[List[str]] = None
+    min_likes: int = 0
+    quote_max_words: Optional[int] = None
+    quote_max_chars: Optional[int] = None
+    quote_width: int = 80
+    photo: str = "topic@minimalist"
+    no_photo: bool = False
+    photo_layout: str = "table"
+    image_max_height: int = 10
+    image_max_width: Optional[int] = None
+    verbose: bool = False
+
+
+class ProfileConfig(BaseModel):
+    profiles: dict[str, Profile] = {}
+    default_profile: Optional[str] = None

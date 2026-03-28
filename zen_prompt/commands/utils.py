@@ -1,41 +1,47 @@
 import os
 import json
+import shutil
+import importlib.resources
 from datetime import datetime
 from typing import Optional, Dict, Any
 
 
 def get_cached_db(working_dir: str) -> Optional[str]:
     """
-    Helper to find the best available local database (quotes.db > quotes-small.db).
-    Order: working_dir/cache -> working_dir -> shipped data (package data).
+    Helper to find the best available local database.
+    If not found in working_dir/cache, it provisions it from the bundled data.
     """
-    # 1. Check working_dir/cache
     cache_dir = os.path.join(working_dir, "cache")
-    main_path = os.path.join(cache_dir, "quotes.db")
-    small_path = os.path.join(cache_dir, "quotes-small.db")
+    db_path = os.path.join(cache_dir, "quotes.db")
 
-    if os.path.exists(main_path):
-        return main_path
-    if os.path.exists(small_path):
-        return small_path
+    # 1. Check if it already exists
+    if os.path.exists(db_path):
+        return db_path
 
-    # 2. Check the working_dir itself
+    # 2. Try to provision from bundled data
+    try:
+        source = importlib.resources.files("zen_prompt.data").joinpath("quotes.db")
+        print(f"DEBUG: source={source}, is_file={source.is_file()}")
+        if source.is_file():
+            os.makedirs(cache_dir, exist_ok=True)
+            with importlib.resources.as_file(source) as src_path:
+                print(f"DEBUG: copying from {src_path} to {db_path}")
+                shutil.copy(src_path, db_path)
+            return db_path
+    except Exception as e:
+        print(f"DEBUG: provisioning failed: {e}")
+        # Fallback to old behavior if provisioning fails or resource not found
+        pass
+
+    # 3. Fallback for development/legacy (check other locations)
+    # Check the working_dir itself
     direct_path = os.path.join(working_dir, "quotes.db")
     if os.path.exists(direct_path):
         return direct_path
 
-    # 3. Check shipped data in the package (fallback for installed package)
+    # Check project-root docs/data/sqlite (fallback for development)
     # The utils.py is in zen_prompt/commands/
     package_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    shipped_path = os.path.join(package_dir, "data", "sqlite", "quotes.db")
-    shipped_small_path = os.path.join(package_dir, "data", "sqlite", "quotes-small.db")
-
-    if os.path.exists(shipped_path):
-        return shipped_path
-    if os.path.exists(shipped_small_path):
-        return shipped_small_path
-
-    # 4. Check project-root docs/data/sqlite (fallback for development)
     project_root = os.path.dirname(package_dir)
     dev_path = os.path.join(project_root, "docs", "data", "sqlite", "quotes.db")
     dev_small_path = os.path.join(
@@ -93,6 +99,40 @@ def save_manifest(manifest_path: str, manifest: Dict[str, Any]):
     os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2)
+
+
+from pathlib import Path
+from zen_prompt.models import ProfileConfig
+
+
+def get_profile_config_path() -> Path:
+    """
+    Get the path to the profiles configuration file.
+    """
+    config_dir = Path.home() / ".config" / "zen-prompt"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir / "profiles.json"
+
+
+def load_profile_config() -> ProfileConfig:
+    """
+    Load the profile configuration from the profiles.json file.
+    """
+    config_path = get_profile_config_path()
+    if config_path.exists():
+        try:
+            return ProfileConfig.model_validate_json(config_path.read_text())
+        except Exception:
+            pass
+    return ProfileConfig()
+
+
+def save_profile_config(config: ProfileConfig):
+    """
+    Save the profile configuration to the profiles.json file.
+    """
+    config_path = get_profile_config_path()
+    config_path.write_text(config.model_dump_json(indent=2))
 
 
 def generate_calver(current_version: str) -> str:

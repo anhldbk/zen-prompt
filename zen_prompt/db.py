@@ -3,7 +3,7 @@ import sqlite3
 import json
 import logging
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
@@ -86,6 +86,23 @@ def init_db(db_path: str):
         )
     """)
 
+    # History table for shown quotes
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS history (
+            quote_id INTEGER,
+            shown_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
+    # Photo rotation table
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS photo_rotation (
+            folder_path TEXT PRIMARY KEY,
+            last_file TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -101,20 +118,26 @@ def get_random_quote(
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    query = "SELECT text, author, book_title, tags, likes, link FROM quotes"
+    # Base query with history exclusion (quotes not shown in the last 7 days)
+    query = """
+        SELECT q.id, q.text, q.author, q.book_title, q.tags, q.likes, q.link 
+        FROM quotes q
+        LEFT JOIN history h ON q.id = h.quote_id AND h.shown_at >= datetime('now', '-7 days')
+        WHERE h.quote_id IS NULL
+    """
     all_conditions = []
     params = []
 
     if min_likes > 0:
-        all_conditions.append("likes >= ?")
+        all_conditions.append("q.likes >= ?")
         params.append(min_likes)
 
     if max_words is not None:
-        all_conditions.append("word_count <= ?")
+        all_conditions.append("q.word_count <= ?")
         params.append(max_words)
 
     if max_chars is not None:
-        all_conditions.append("char_count <= ?")
+        all_conditions.append("q.char_count <= ?")
         params.append(max_chars)
 
     if tags:
@@ -130,10 +153,10 @@ def get_random_quote(
                         tag_pattern = "%" + '"' + tag_pattern
                     if not tag_pattern.endswith("%"):
                         tag_pattern = tag_pattern + '"' + "%"
-                tag_conditions.append("LOWER(tags) LIKE ?")
+                tag_conditions.append("LOWER(q.tags) LIKE ?")
                 params.append(tag_pattern)
             else:
-                tag_conditions.append("LOWER(tags) LIKE ?")
+                tag_conditions.append("LOWER(q.tags) LIKE ?")
                 params.append(f'%"{tag}"%')
         if tag_conditions:
             all_conditions.append("(" + " OR ".join(tag_conditions) + ")")
@@ -144,26 +167,26 @@ def get_random_quote(
             author_lower = author.lower()
             if "*" in author_lower or "?" in author_lower:
                 author_pattern = author_lower.replace("*", "%").replace("?", "_")
-                author_conditions.append("LOWER(author) LIKE ?")
+                author_conditions.append("LOWER(q.author) LIKE ?")
                 params.append(author_pattern)
             else:
-                author_conditions.append("LOWER(author) LIKE ?")
+                author_conditions.append("LOWER(q.author) LIKE ?")
                 params.append(f"%{author_lower}%")
         if author_conditions:
             all_conditions.append("(" + " OR ".join(author_conditions) + ")")
 
     if all_conditions:
-        query += " WHERE " + " AND ".join(all_conditions)
-        query += " ORDER BY RANDOM() LIMIT 1"
-    else:
-        # Optimized random for large datasets without filters
-        query += " WHERE id >= (ABS(RANDOM()) % (SELECT MAX(id) FROM quotes)) LIMIT 1"
+        query += " AND " + " AND ".join(all_conditions)
+
+    # Simplified query with ORDER BY RANDOM()
+    query += " ORDER BY RANDOM() LIMIT 1"
 
     row = cursor.execute(query, params).fetchone()
     if not row:
         return None
 
     return {
+        "id": row["id"],
         "text": row["text"],
         "author": row["author"],
         "book_title": row["book_title"],
@@ -292,6 +315,139 @@ def update_crawl_state(conn: sqlite3.Connection, tag_url: str, page: int):
         (tag_url, page, now),
     )
     conn.commit()
+
+
+def record_history(conn: sqlite3.Connection, quote_id: int):
+    """
+    Record that a quote has been shown.
+    """
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO history (quote_id) VALUES (?)", (quote_id,))
+    conn.commit()
+
+
+def get_rotation_state(conn: sqlite3.Connection, folder_path: str) -> Optional[str]:
+    """
+    Retrieve the last shown file for a given folder.
+    """
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT last_file FROM photo_rotation WHERE folder_path = ?", (folder_path,)
+    )
+    result = cursor.fetchone()
+    return result[0] if result else None
+
+
+def update_rotation_state(conn: sqlite3.Connection, folder_path: str, filename: str):
+    """
+    Store the "last shown" photo for a given folder.
+    """
+    cursor = conn.cursor()
+    now = datetime.now().isoformat()
+    cursor.execute(
+        """
+        INSERT INTO photo_rotation (folder_path, last_file, updated_at)
+        VALUES (?, ?, ?)
+        ON CONFLICT(folder_path) DO UPDATE SET
+            last_file = excluded.last_file,
+            updated_at = excluded.updated_at
+    """,
+        (folder_path, filename, now),
+    )
+    conn.commit()
+
+
+def get_history(conn: sqlite3.Connection, limit: int = 10):
+    """
+    Retrieve the most recent quotes shown to the user.
+    """
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT q.text, q.author, h.shown_at
+        FROM history h
+        JOIN quotes q ON h.quote_id = q.id
+        ORDER BY h.shown_at DESC
+        LIMIT ?
+    """,
+        (limit,),
+    )
+    return cursor.fetchall()
+
+
+def clear_history(conn: sqlite3.Connection):
+    """
+    Clear all entries from the history table.
+    """
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM history")
+    conn.commit()
+
+
+def get_history_stats(conn: sqlite3.Connection):
+    """
+    Retrieve statistics from the history table.
+    """
+    cursor = conn.cursor()
+
+    # 1. Total quotes seen
+    cursor.execute("SELECT COUNT(*) FROM history")
+    total_seen = cursor.fetchone()[0]
+
+    # 2. Inspiration Streak (consecutive days)
+    # This is a bit complex in SQL, so we'll do it by fetching dates
+    cursor.execute(
+        "SELECT DISTINCT date(shown_at) as day FROM history ORDER BY day DESC"
+    )
+    rows = cursor.fetchall()
+    days = [datetime.strptime(row[0], "%Y-%m-%d").date() for row in rows]
+
+    streak = 0
+    if days:
+        today = datetime.now().date()
+        yesterday = today - timedelta(days=1)
+
+        # If last seen was today or yesterday, start counting
+        if days[0] == today or days[0] == yesterday:
+            streak = 1
+            for i in range(len(days) - 1):
+                if (days[i] - days[i + 1]).days == 1:
+                    streak += 1
+                else:
+                    break
+
+    # 3. Top authors in history
+    cursor.execute(
+        """
+        SELECT q.author, COUNT(*) as count
+        FROM history h
+        JOIN quotes q ON h.quote_id = q.id
+        GROUP BY q.author
+        ORDER BY count DESC
+        LIMIT 5
+    """
+    )
+    top_authors = cursor.fetchall()
+
+    # 4. Top tags in history
+    # Again, handle JSON tags
+    cursor.execute("SELECT q.tags FROM history h JOIN quotes q ON h.quote_id = q.id")
+    rows = cursor.fetchall()
+    tag_counts = {}
+    for row in rows:
+        tags = json.loads(row[0]) if row[0] else []
+        for t in tags:
+            tag_counts[t] = tag_counts.get(t, 0) + 1
+
+    top_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+
+    return {
+        "total_seen": total_seen,
+        "streak": streak,
+        "top_authors": top_authors,
+        "top_tags": top_tags,
+    }
 
 
 def get_all_quotes(conn: sqlite3.Connection):

@@ -3,7 +3,7 @@ import textwrap
 import typer
 from typing import Optional, List
 from zen_prompt.commands.utils import get_cached_db
-from zen_prompt.db import get_random_quote
+from zen_prompt.db import get_random_quote, record_history
 from zen_prompt.commands.arts import (
     DEFAULT_PHOTO_TOPIC,
     get_photo_renderable,
@@ -88,6 +88,7 @@ def _render_photo_table_layout(
 
 
 def random(
+    ctx: typer.Context,
     tag: Optional[List[str]] = typer.Option(
         None,
         "--tag",
@@ -153,6 +154,9 @@ def random(
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Display tags for the quote"
     ),
+    profile: Optional[str] = typer.Option(
+        None, "--profile", help="Use a saved profile for settings"
+    ),
     working_dir: str = typer.Option(
         "docs/data/sqlite",
         "--working-dir",
@@ -163,6 +167,34 @@ def random(
     """
     Get a random quote from the local cached database.
     """
+    from zen_prompt.commands.utils import load_profile_config
+    import click
+
+    config = load_profile_config()
+    profile_name = profile or config.default_profile
+    if profile_name:
+        if profile_name in config.profiles:
+            p_data = config.profiles[profile_name]
+            # Override only if not provided by user
+            def is_provided(name):
+                return ctx.get_parameter_source(name) == click.core.ParameterSource.COMMANDLINE
+
+            if not is_provided("tag"): tag = p_data.tag
+            if not is_provided("author"): author = p_data.author
+            if not is_provided("min_likes"): min_likes = p_data.min_likes
+            if not is_provided("quote_max_words"): quote_max_words = p_data.quote_max_words
+            if not is_provided("quote_max_chars"): quote_max_chars = p_data.quote_max_chars
+            if not is_provided("quote_width"): quote_width = p_data.quote_width
+            if not is_provided("photo"): photo = p_data.photo
+            if not is_provided("no_photo"): no_photo = p_data.no_photo
+            if not is_provided("photo_layout"): photo_layout = p_data.photo_layout
+            if not is_provided("image_max_height"): image_max_height = p_data.image_max_height
+            if not is_provided("image_max_width"): image_max_width = p_data.image_max_width
+            if not is_provided("verbose"): verbose = p_data.verbose
+        elif profile:
+            typer.echo(f"Error: Profile '{profile}' not found.", err=True)
+            raise typer.Exit(code=1)
+
     db_path = get_cached_db(working_dir)
     if not db_path:
         typer.echo(
@@ -239,6 +271,9 @@ def random(
                         typer.echo(f"  Link: {quote['link']}")
 
                 typer.echo("")  # Newline
+
+            # Record that this quote was shown
+            record_history(conn, quote["id"])
 
         else:
             msg = "No quotes found in database"

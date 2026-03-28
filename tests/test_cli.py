@@ -121,12 +121,12 @@ def test_random_command(tmp_path):
     ):
         mock_get_db.return_value = str(db_path)
         mock_get_random.return_value = {
+            "id": 1,
             "text": "Random quote",
             "author": "Author",
             "book_title": "Book",
             "tags": ["tag1"],
         }
-
         # Test without verbose
         result = runner.invoke(
             app, ["random", "--no-photo", "--working-dir", str(working_dir)]
@@ -160,12 +160,12 @@ def test_random_passes_quote_length_filters(tmp_path):
     ):
         mock_get_db.return_value = str(db_path)
         mock_get_random.return_value = {
+            "id": 1,
             "text": "Random quote",
             "author": "Author",
             "book_title": "Book",
             "tags": ["tag1"],
         }
-
         result = runner.invoke(
             app,
             [
@@ -203,6 +203,7 @@ def test_random_wraps_long_quote_with_quote_width(tmp_path):
     ):
         mock_get_db.return_value = str(db_path)
         mock_get_random.return_value = {
+            "id": 1,
             "text": long_quote,
             "author": "Author",
             "book_title": "Book",
@@ -238,6 +239,7 @@ def test_random_wraps_long_attribution_with_quote_width(tmp_path):
     ):
         mock_get_db.return_value = str(db_path)
         mock_get_random.return_value = {
+            "id": 1,
             "text": "Short quote",
             "author": "Firstname Middlename Lastname",
             "book_title": "An Extremely Long Book Title",
@@ -537,6 +539,7 @@ def test_random_with_topic_photo_option(tmp_path):
     ):
         mock_get_db.return_value = str(db_path)
         mock_get_random.return_value = {
+            "id": 1,
             "text": "Random quote",
             "author": "Author",
             "book_title": "Book",
@@ -583,6 +586,7 @@ def test_random_with_table_photo_layout(tmp_path):
     ):
         mock_get_db.return_value = str(db_path)
         mock_get_random.return_value = {
+            "id": 1,
             "text": "Random quote",
             "author": "Author",
             "book_title": "Book",
@@ -633,6 +637,7 @@ def test_random_with_file_photo_option(tmp_path):
     ):
         mock_get_db.return_value = str(db_path)
         mock_get_random.return_value = {
+            "id": 1,
             "text": "Random quote",
             "author": "Author",
             "book_title": "Book",
@@ -699,6 +704,7 @@ def test_random_with_no_photo_option(tmp_path):
     ):
         mock_get_db.return_value = str(db_path)
         mock_get_random.return_value = {
+            "id": 1,
             "text": "Random quote",
             "author": "Author",
             "book_title": "Book",
@@ -727,6 +733,7 @@ def test_random_passes_topic_mode_to_renderer(tmp_path):
     ):
         mock_get_db.return_value = str(db_path)
         mock_get_random.return_value = {
+            "id": 1,
             "text": "Random quote",
             "author": "Author",
             "book_title": "Book",
@@ -774,6 +781,7 @@ def test_random_uses_monochrome_photo_by_default(tmp_path):
     ):
         mock_get_db.return_value = str(db_path)
         mock_get_random.return_value = {
+            "id": 1,
             "text": "Random quote",
             "author": "Author",
             "book_title": "Book",

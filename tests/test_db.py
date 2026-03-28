@@ -104,6 +104,18 @@ def test_crawl_state(db_conn):
     assert get_crawl_state(db_conn, tag_url) == 10
 
 
+def test_photo_rotation_state(db_conn):
+    from zen_prompt.db import get_rotation_state, update_rotation_state
+    folder_path = "/path/to/photos"
+    assert get_rotation_state(db_conn, folder_path) is None
+
+    update_rotation_state(db_conn, folder_path, "photo1.jpg")
+    assert get_rotation_state(db_conn, folder_path) == "photo1.jpg"
+
+    update_rotation_state(db_conn, folder_path, "photo2.jpg")
+    assert get_rotation_state(db_conn, folder_path) == "photo2.jpg"
+
+
 def test_get_stats(db_conn):
     from zen_prompt.db import get_stats
 

@@ -26,7 +26,7 @@ build-backend = "hatchling.build"
 packages = ["zen_prompt"]
 
 [tool.hatch.build.targets.wheel.force-include]
-"docs/data" = "zen_prompt/data"
+"docs/data/sqlite/quotes-small.db" = "zen_prompt/data/quotes.db"
 
 [tool.hatch.build]
 exclude = [

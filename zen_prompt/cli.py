@@ -9,6 +9,8 @@ from zen_prompt.commands import search as search_mod
 from zen_prompt.commands import stat as stat_mod
 from zen_prompt.commands import distill as distill_mod
 from zen_prompt.commands import get as get_mod
+from zen_prompt.commands import history as history_mod
+from zen_prompt.commands import profile as profile_mod
 
 app = typer.Typer(
     help="Aesthetic inspiration for your shell.",
@@ -48,6 +50,8 @@ app.command()(search_mod.search)
 app.command()(stat_mod.stat)
 app.command()(distill_mod.distill)
 app.command()(get_mod.get)
+app.add_typer(history_mod.app, name="history")
+app.add_typer(profile_mod.app, name="profile")
 
 if __name__ == "__main__":
     app()
