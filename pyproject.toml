@@ -9,14 +9,11 @@ dependencies = [
     "pydantic>=2.12.5",
     "rich>=14.3.3",
     "textual-image>=0.8.5",
-    "tqdm>=4.67.3",
     "typer>=0.24.1",
 ]
 
 [project.optional-dependencies]
-all = [
-    "scrapy>=2.14.2",
-]
+all = ["scrapy>=2.14.2"]
 
 [project.scripts]
 zen-prompt = "zen_prompt.cli:app"
