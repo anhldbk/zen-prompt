@@ -74,12 +74,28 @@ def test_runtime_commands_default_to_data_root_working_dir():
 def test_crawl_command_creates_dir(tmp_path):
     working_dir = tmp_path / "test_data"
     # Mocking CrawlerProcess to avoid live crawl
-    with patch("scrapy.crawler.CrawlerProcess"):
+    with patch("zen_prompt.commands.crawl._load_crawler_process") as mock_loader:
+        mock_loader.return_value = MagicMock()
         result = runner.invoke(
             app, ["crawl", "--working-dir", str(working_dir), "--tags", "test"]
         )
         assert result.exit_code == 0
         assert os.path.exists(working_dir)
+
+
+def test_crawl_command_explains_missing_all_extra(tmp_path):
+    working_dir = tmp_path / "test_data"
+
+    with patch(
+        "zen_prompt.commands.crawl._load_crawler_process",
+        side_effect=ModuleNotFoundError("scrapy"),
+    ):
+        result = runner.invoke(
+            app, ["crawl", "--working-dir", str(working_dir), "--tags", "test"]
+        )
+
+    assert result.exit_code == 1
+    assert "requires the optional 'all' extras" in result.stderr
 
 
 def test_crawl_help_uses_download_delay():

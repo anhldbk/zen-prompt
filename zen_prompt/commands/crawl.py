@@ -5,6 +5,12 @@ from zen_prompt.db import init_db
 from zen_prompt.commands.utils import get_raw_db_path
 
 
+def _load_crawler_process():
+    from scrapy.crawler import CrawlerProcess
+
+    return CrawlerProcess
+
+
 def crawl(
     working_dir: str = typer.Option(
         "docs/data/sqlite",
@@ -25,7 +31,16 @@ def crawl(
     """
     Run the Goodreads quotes crawler and store results in SQLite.
     """
-    from scrapy.crawler import CrawlerProcess
+    try:
+        CrawlerProcess = _load_crawler_process()
+    except ModuleNotFoundError as exc:
+        typer.echo(
+            "Error: crawl requires the optional 'all' extras. Install with "
+            "'pip install \"zen-prompt[all]\"' or reinstall the local wheel with "
+            "that extra enabled.",
+            err=True,
+        )
+        raise typer.Exit(code=1) from exc
 
     from zen_prompt.spider import GoodreadsQuotesSpider
 

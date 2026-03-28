@@ -1,7 +1,23 @@
 #!/bin/bash
+set -euo pipefail
+
+MODE="${1:-light}"
+
+case "$MODE" in
+  light)
+    PACKAGE_SPEC=""
+    ;;
+  full|all)
+    PACKAGE_SPEC="[all]"
+    ;;
+  *)
+    echo "Usage: $0 [light|full]" >&2
+    exit 1
+    ;;
+esac
 
 uv build
 
 # grab the latest wheel file from dist
 WHEEL_FILE=$(ls dist/*.whl | tail -n 1)
-pipx install --force "$WHEEL_FILE"
+pipx install --force "${WHEEL_FILE}${PACKAGE_SPEC}"

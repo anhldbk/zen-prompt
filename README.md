@@ -23,13 +23,31 @@ Aesthetic inspiration for your shell.
 
 ## Setup
 
-Install the package directly from PyPI (or your internal index):
+Install the lightweight runtime by default:
 
 ```bash
 pip install zen-prompt
 ```
 
-This will install the `zen-prompt` command-line tool globally (or in your virtual environment).
+This installs the `zen-prompt` command-line tool with the runtime features needed for:
+
+- `random`
+- `sync`
+- `history`
+- `profile`
+- `search`
+- `get`
+- `stat`
+- `distill`
+- `export`
+
+If you also want crawling support, install the full extra:
+
+```bash
+pip install "zen-prompt[all]"
+```
+
+The `all` extra adds the crawler stack used by `zen-prompt crawl`.
 
 
 ## Usage

@@ -7,12 +7,15 @@ authors = [{ name = "Andy Le", email = "anhldbk@gmail.com" }]
 requires-python = ">=3.13"
 dependencies = [
     "pydantic>=2.12.5",
-    "pydantic-settings>=2.13.1",
     "rich>=14.3.3",
-    "scrapy>=2.14.2",
     "textual-image>=0.8.5",
     "tqdm>=4.67.3",
     "typer>=0.24.1",
+]
+
+[project.optional-dependencies]
+all = [
+    "scrapy>=2.14.2",
 ]
 
 [project.scripts]
