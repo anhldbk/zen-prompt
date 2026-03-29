@@ -208,7 +208,8 @@ def _build_random_quote_filters(
         if author_conditions:
             where_clauses.append("(" + " OR ".join(author_conditions) + ")")
 
-    return " AND ".join(where_clauses), params
+    where_clause = " AND ".join(where_clauses) if where_clauses else "1=1"
+    return where_clause, params
 
 
 def _fetch_random_quote_row(

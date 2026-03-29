@@ -124,7 +124,7 @@ def _read_piped_quote_text() -> str | None:
 
 
 def _supports_terminal_graphics() -> bool:
-    return sys.stdout.isatty()
+    return True
 
 
 def random(
@@ -252,13 +252,13 @@ def random(
             typer.echo(f"Error: Profile '{profile}' not found.", err=True)
             raise typer.Exit(code=1)
 
-    if no_photo or not _supports_terminal_graphics():
-        photo = ""
-    else:
+    if not no_photo:
         try:
             photo = validate_photo_mode(photo)
         except ValueError as exc:
             raise typer.BadParameter(str(exc), param_hint="--photo") from exc
+    if no_photo or not _supports_terminal_graphics():
+        photo = ""
 
     try:
         photo_layout = validate_photo_layout(photo_layout)
