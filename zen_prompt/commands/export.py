@@ -33,7 +33,7 @@ def export(
     ),
 ):
     """
-    Export the database as optimized SQLite, JSON, and CSV files.
+    Export the database as optimized SQLite, JSON, CSV, and text files.
     This command optimizes the main database, creates a small subset, and
     exports everything to the 'data' directory within the target output.
     """
@@ -48,11 +48,13 @@ def export(
     db_out_dir = os.path.join(output_dir, "data", "sqlite")
     json_out_dir = os.path.join(output_dir, "data", "json")
     csv_out_dir = os.path.join(output_dir, "data", "csv")
+    text_out_dir = os.path.join(output_dir, "data", "text")
     manifest_path = os.path.join(output_dir, "data", "manifest.json")
 
     os.makedirs(db_out_dir, exist_ok=True)
     os.makedirs(json_out_dir, exist_ok=True)
     os.makedirs(csv_out_dir, exist_ok=True)
+    os.makedirs(text_out_dir, exist_ok=True)
 
     # 1. Export SQLite Files
     # 1.1 Create quotes-small.db for buddhism tag
@@ -83,7 +85,27 @@ def export(
                 row["tags"] = "|".join(q["tags"])
                 writer.writerow(row)
 
-    # 2. Export JSON and CSV Files
+    def write_fortune_text(quotes_list, output_path):
+        def format_quote(quote):
+            lines = [quote["text"].rstrip()]
+            if quote.get("author"):
+                attribution = f"  -- {quote['author']}"
+                if quote.get("book_title"):
+                    attribution += f" (from '{quote['book_title']}')"
+                lines.append(attribution)
+            return "\n".join(lines)
+
+        def escape_separator(text):
+            return "\n".join(
+                r"\%" if line == "%" else line for line in text.splitlines()
+            )
+
+        with open(output_path, "w", encoding="utf-8") as f:
+            for quote in quotes_list:
+                f.write(escape_separator(format_quote(quote)))
+                f.write("\n%\n")
+
+    # 2. Export JSON, CSV, and text files
     conn = sqlite3.connect(final_main_db_path)
     conn.row_factory = sqlite3.Row
     try:
@@ -116,7 +138,11 @@ def export(
         typer.echo(f"Exporting all quotes to {full_csv_path}...")
         write_csv(full_quotes, full_csv_path)
 
-        # 2.2 Small Collection (quotes-small.json & quotes-small.csv)
+        full_text_path = os.path.join(text_out_dir, "quotes.txt")
+        typer.echo(f"Exporting all quotes to {full_text_path}...")
+        write_fortune_text(full_quotes, full_text_path)
+
+        # 2.2 Small Collection (quotes-small.json, quotes-small.csv & quotes-small.txt)
         small_conn = sqlite3.connect(small_db_path)
         small_conn.row_factory = sqlite3.Row
         try:
@@ -130,6 +156,10 @@ def export(
             small_csv_path = os.path.join(csv_out_dir, "quotes-small.csv")
             typer.echo(f"Exporting small collection to {small_csv_path}...")
             write_csv(small_quotes, small_csv_path)
+
+            small_text_path = os.path.join(text_out_dir, "quotes-small.txt")
+            typer.echo(f"Exporting small collection to {small_text_path}...")
+            write_fortune_text(small_quotes, small_text_path)
         finally:
             small_conn.close()
 

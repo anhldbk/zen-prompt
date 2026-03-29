@@ -16,11 +16,11 @@ def sync(
         False,
         "--all-formats",
         "-a",
-        help="Sync all data formats (SQLite, CSV, JSON)",
+        help="Sync all data formats (SQLite, CSV, JSON, text)",
     ),
 ):
     """
-    Sync data files (SQLite, CSV, JSON) from the remote static website.
+    Sync data files (SQLite, CSV, JSON, text) from the remote static website.
     """
     # Ensure URL ends with slash
     if not base_url.endswith("/"):
@@ -89,6 +89,8 @@ def sync(
                 ("csv/quotes-small.csv", "Small CSV quotes"),
                 ("json/quotes.json", "JSON quotes"),
                 ("json/quotes-small.json", "Small JSON quotes"),
+                ("text/quotes.txt", "Text quotes"),
+                ("text/quotes-small.txt", "Small text quotes"),
             ]
         )
 

@@ -197,6 +197,68 @@ def test_export_with_mock_db(tmp_path):
         )
         assert result.exit_code == 0
         assert "Successfully exported" in result.stdout
+        assert os.path.exists(output_dir / "data" / "text" / "quotes.txt")
+        assert os.path.exists(output_dir / "data" / "text" / "quotes-small.txt")
+
+
+def test_export_writes_fortune_text_files(tmp_path):
+    working_dir = tmp_path / "data/sqlite"
+    os.makedirs(working_dir)
+    db_path = working_dir / "quotes-distilled.db"
+    open(db_path, "a").close()
+
+    output_dir = tmp_path / "output"
+    full_quotes = [
+        {
+            "text": "First quote",
+            "author": "Author One",
+            "book_title": "Book One",
+            "tags": ["tag1"],
+            "likes": 10,
+            "link": "https://example.com/1",
+        },
+        {
+            "text": "Second quote\n%",
+            "author": "Author Two",
+            "book_title": None,
+            "tags": ["tag2"],
+            "likes": 20,
+            "link": "https://example.com/2",
+        },
+    ]
+    small_quotes = [full_quotes[0]]
+
+    with (
+        patch("zen_prompt.commands.export.sqlite3.connect") as mock_connect,
+        patch("zen_prompt.commands.export.optimize_db"),
+        patch("zen_prompt.commands.export.create_subset_db"),
+        patch("zen_prompt.commands.export.get_all_quotes") as mock_get_quotes,
+    ):
+        mock_connect.side_effect = [MagicMock(), MagicMock()]
+        mock_get_quotes.side_effect = [full_quotes, small_quotes]
+
+        result = runner.invoke(
+            app,
+            [
+                "export",
+                "--working-dir",
+                str(working_dir),
+                "--output-dir",
+                str(output_dir),
+            ],
+        )
+
+    assert result.exit_code == 0
+    full_text = (output_dir / "data" / "text" / "quotes.txt").read_text(
+        encoding="utf-8"
+    )
+    small_text = (output_dir / "data" / "text" / "quotes-small.txt").read_text(
+        encoding="utf-8"
+    )
+
+    assert "First quote\n  -- Author One (from 'Book One')\n%\n" in full_text
+    assert "Second quote\n\\%\n  -- Author Two\n%\n" in full_text
+    assert small_text == "First quote\n  -- Author One (from 'Book One')\n%\n"
 
 
 def test_random_command(tmp_path):
@@ -567,6 +629,8 @@ def test_sync_command_default_only_sqlite(tmp_path):
         assert not os.path.exists(working_dir / "csv" / "quotes-small.csv")
         assert not os.path.exists(working_dir / "json" / "quotes.json")
         assert not os.path.exists(working_dir / "json" / "quotes-small.json")
+        assert not os.path.exists(working_dir / "text" / "quotes.txt")
+        assert not os.path.exists(working_dir / "text" / "quotes-small.txt")
 
 
 def test_sync_command_all_formats(tmp_path):
@@ -583,6 +647,8 @@ def test_sync_command_all_formats(tmp_path):
             b"fake data",  # csv/quotes-small.csv
             b"fake data",  # json/quotes.json
             b"fake data",  # json/quotes-small.json
+            b"fake data",  # text/quotes.txt
+            b"fake data",  # text/quotes-small.txt
         ]
         mock_urlopen.return_value = mock_response
 
@@ -594,9 +660,11 @@ def test_sync_command_all_formats(tmp_path):
         assert "SQLite database" in result.stdout
         assert "CSV quotes" in result.stdout
         assert "JSON quotes" in result.stdout
+        assert "Text quotes" in result.stdout
         assert os.path.exists(working_dir / "sqlite" / "quotes.db")
         assert os.path.exists(working_dir / "csv" / "quotes.csv")
         assert os.path.exists(working_dir / "json" / "quotes.json")
+        assert os.path.exists(working_dir / "text" / "quotes.txt")
 
 
 def test_stat_command(tmp_path):
