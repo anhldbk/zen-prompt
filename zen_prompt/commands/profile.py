@@ -1,6 +1,5 @@
 import typer
 from typing import Optional, List
-from zen_prompt.models import Profile
 from zen_prompt.commands.utils import load_profile_config, save_profile_config
 from zen_prompt.commands.arts import DEFAULT_PHOTO_TOPIC
 
@@ -79,6 +78,8 @@ def save(
     """
     Save current flags as a named profile.
     """
+    from zen_prompt.models import Profile
+
     config = load_profile_config()
     profile = Profile(
         tag=tag,

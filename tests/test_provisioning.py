@@ -65,3 +65,20 @@ def test_get_cached_db_returns_existing_when_present():
         assert returned_path == db_path
         with open(returned_path, "r") as f:
             assert f.read() == "existing content"
+
+
+def test_get_cached_db_skips_runtime_maintenance_for_existing_cache():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        cache_dir = os.path.join(tmp_dir, "cache")
+        os.makedirs(cache_dir)
+        db_path = os.path.join(cache_dir, "quotes.db")
+        with open(db_path, "w") as f:
+            f.write("existing content")
+
+        with patch(
+            "zen_prompt.commands.utils._ensure_runtime_db_if_valid"
+        ) as mock_ensure:
+            returned_path = get_cached_db(tmp_dir)
+
+        assert returned_path == db_path
+        mock_ensure.assert_not_called()

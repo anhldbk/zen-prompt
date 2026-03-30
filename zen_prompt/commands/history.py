@@ -1,7 +1,5 @@
 import sqlite3
 import typer
-from rich.console import Console
-from rich.table import Table
 from zen_prompt import db
 from zen_prompt.commands import utils
 
@@ -37,6 +35,9 @@ def list_history(
         if not history:
             typer.echo("No history found.")
             return
+
+        from rich.console import Console
+        from rich.table import Table
 
         table = Table(title=f"Recent Quotes (Last {len(history)})")
         table.add_column("Quote", style="italic")

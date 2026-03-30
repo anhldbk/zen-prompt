@@ -5,10 +5,10 @@ import shutil
 import importlib.resources
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 
-from zen_prompt.db import ensure_runtime_db
-from zen_prompt.models import ProfileConfig
+if TYPE_CHECKING:
+    from zen_prompt.models import ProfileConfig
 
 RAW_DB_FILENAME = "quotes-raw.db"
 DISTILLED_DB_FILENAME = "quotes-distilled.db"
@@ -16,6 +16,8 @@ RUNTIME_DB_FILENAME = "quotes.db"
 
 
 def _ensure_runtime_db_if_valid(db_path: str):
+    from zen_prompt.db import ensure_runtime_db
+
     try:
         ensure_runtime_db(db_path)
     except sqlite3.Error:
@@ -41,7 +43,6 @@ def get_runtime_db(working_dir: str) -> Optional[str]:
 
     # 1. Check if it already exists
     if os.path.exists(db_path):
-        _ensure_runtime_db_if_valid(db_path)
         return db_path
 
     # 2. Try to provision from bundled data
@@ -63,7 +64,6 @@ def get_runtime_db(working_dir: str) -> Optional[str]:
     # Check the working_dir itself
     direct_path = os.path.join(working_dir, RUNTIME_DB_FILENAME)
     if os.path.exists(direct_path):
-        _ensure_runtime_db_if_valid(direct_path)
         return direct_path
 
     # Check project-root docs/data/sqlite (fallback for development)
@@ -76,10 +76,8 @@ def get_runtime_db(working_dir: str) -> Optional[str]:
     )
 
     if os.path.exists(dev_path):
-        _ensure_runtime_db_if_valid(dev_path)
         return dev_path
     if os.path.exists(dev_small_path):
-        _ensure_runtime_db_if_valid(dev_small_path)
         return dev_small_path
 
     return None
@@ -143,10 +141,12 @@ def get_profile_config_path() -> Path:
     return config_dir / "profiles.json"
 
 
-def load_profile_config() -> ProfileConfig:
+def load_profile_config() -> "ProfileConfig":
     """
     Load the profile configuration from the profiles.json file.
     """
+    from zen_prompt.models import ProfileConfig
+
     config_path = get_profile_config_path()
     if config_path.exists():
         try:
@@ -156,7 +156,21 @@ def load_profile_config() -> ProfileConfig:
     return ProfileConfig()
 
 
-def save_profile_config(config: ProfileConfig):
+def load_profile_config_data() -> Dict[str, Any]:
+    """
+    Load raw profile configuration JSON without Pydantic validation.
+    Useful on latency-sensitive read paths that only need simple lookups.
+    """
+    config_path = get_profile_config_path()
+    if config_path.exists():
+        try:
+            return json.loads(config_path.read_text())
+        except Exception:
+            pass
+    return {"profiles": {}, "default_profile": None}
+
+
+def save_profile_config(config: "ProfileConfig"):
     """
     Save the profile configuration to the profiles.json file.
     """

@@ -115,6 +115,9 @@ def init_db(db_path: str, *, backfill_lengths: bool = True):
 
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_quotes_likes ON quotes(likes)")
     cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_author_nocase ON quotes(author COLLATE NOCASE)"
+    )
+    cursor.execute(
         "CREATE INDEX IF NOT EXISTS idx_quotes_word_count ON quotes(word_count)"
     )
     cursor.execute(
@@ -204,10 +207,10 @@ def _build_random_quote_filters(
                         tag_pattern = "%" + '"' + tag_pattern
                     if not tag_pattern.endswith("%"):
                         tag_pattern = tag_pattern + '"' + "%"
-                tag_conditions.append("LOWER(q.tags) LIKE ?")
+                tag_conditions.append("q.tags LIKE ? COLLATE NOCASE")
                 params.append(tag_pattern)
             else:
-                tag_conditions.append("LOWER(q.tags) LIKE ?")
+                tag_conditions.append("q.tags LIKE ? COLLATE NOCASE")
                 params.append(f'%"{tag}"%')
         if tag_conditions:
             where_clauses.append("(" + " OR ".join(tag_conditions) + ")")
@@ -218,10 +221,10 @@ def _build_random_quote_filters(
             author_lower = author.lower()
             if "*" in author_lower or "?" in author_lower:
                 author_pattern = author_lower.replace("*", "%").replace("?", "_")
-                author_conditions.append("LOWER(q.author) LIKE ?")
+                author_conditions.append("q.author LIKE ? COLLATE NOCASE")
                 params.append(author_pattern)
             else:
-                author_conditions.append("LOWER(q.author) LIKE ?")
+                author_conditions.append("q.author LIKE ? COLLATE NOCASE")
                 params.append(f"%{author_lower}%")
         if author_conditions:
             where_clauses.append("(" + " OR ".join(author_conditions) + ")")
@@ -260,6 +263,17 @@ def _fetch_random_quote_row(
     return cursor.execute(wrap_query, [pivot, *params]).fetchone()
 
 
+def _get_quote_id_bounds(cursor: sqlite3.Cursor):
+    min_row = cursor.execute("SELECT id FROM quotes ORDER BY id ASC LIMIT 1").fetchone()
+    if not min_row:
+        return None
+
+    max_row = cursor.execute(
+        "SELECT id FROM quotes ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    return {"min_id": min_row["id"], "max_id": max_row["id"]}
+
+
 def get_random_quote(
     conn: sqlite3.Connection,
     tags: Optional[List[str]] = None,
@@ -280,38 +294,14 @@ def get_random_quote(
         exclude_recent_history=exclude_recent_history,
     )
 
-    bounds = cursor.execute(
-        f"""
-        SELECT MIN(q.id) AS min_id, MAX(q.id) AS max_id
-        FROM quotes q
-        WHERE {where_clause}
-        """,
-        params,
-    ).fetchone()
+    bounds = _get_quote_id_bounds(cursor)
     if not bounds or bounds["min_id"] is None or bounds["max_id"] is None:
         return None
 
     min_id = bounds["min_id"]
     max_id = bounds["max_id"]
-    attempts = min(16, max(4, max_id - min_id + 1))
-    row = None
-    for _ in range(attempts):
-        pivot = random.randint(min_id, max_id)
-        row = _fetch_random_quote_row(cursor, where_clause, params, pivot)
-        if row:
-            break
-
-    if not row:
-        row = cursor.execute(
-            f"""
-            SELECT q.id, q.text, q.author, q.book_title, q.tags, q.likes, q.link
-            FROM quotes q
-            WHERE {where_clause}
-            ORDER BY q.id
-            LIMIT 1
-            """,
-            params,
-        ).fetchone()
+    pivot = random.randint(min_id, max_id)
+    row = _fetch_random_quote_row(cursor, where_clause, params, pivot)
     if not row:
         return None
 
@@ -918,6 +908,9 @@ def optimize_db(db_path: str):
 
     # Create standard indexes
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_author ON quotes(author)")
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_author_nocase ON quotes(author COLLATE NOCASE)"
+    )
 
     # Create FTS5 virtual table for searching
     cursor.execute("DROP TABLE IF EXISTS quotes_fts")

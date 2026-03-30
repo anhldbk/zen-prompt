@@ -302,6 +302,19 @@ def test_get_random_quote_with_max_words_and_chars_backfills_missing_cached_leng
     assert quote is None
 
 
+def test_get_random_quote_matches_author_case_insensitively(db_conn):
+    from zen_prompt.db import get_random_quote, save_quote
+    from zen_prompt.models import Quote
+
+    save_quote(db_conn, Quote(text="mindful walking", author="Thich Nhat Hanh"))
+    save_quote(db_conn, Quote(text="other", author="Someone Else"))
+
+    quote = get_random_quote(db_conn, authors=["thich nhat hanh"])
+    assert quote is not None
+    assert quote["author"] == "Thich Nhat Hanh"
+    assert quote["text"] == "mindful walking"
+
+
 def test_init_db_backfills_length_columns_for_existing_schema(tmp_path):
     db_path = str(tmp_path / "legacy.db")
     conn = sqlite3.connect(db_path)
