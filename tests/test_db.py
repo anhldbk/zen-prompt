@@ -95,6 +95,28 @@ def test_create_subset_db_with_tag(tmp_path):
     assert quotes_data[0]["likes"] == 100
 
 
+def test_create_subset_db_computes_length_columns(tmp_path):
+    from zen_prompt.db import create_subset_db
+
+    src_db = str(tmp_path / "source.db")
+    dst_db = str(tmp_path / "subset.db")
+
+    init_db(src_db)
+    conn = sqlite3.connect(src_db)
+    save_quote(conn, Quote(text="two words", author="Author1", tags=["buddhism"]))
+    conn.close()
+
+    create_subset_db(src_db, dst_db, limit=10, tag="buddhism")
+
+    subset_conn = sqlite3.connect(dst_db)
+    row = subset_conn.execute(
+        "SELECT char_count, word_count FROM quotes WHERE author = ?", ("Author1",)
+    ).fetchone()
+    subset_conn.close()
+
+    assert row == (9, 2)
+
+
 def test_crawl_state(db_conn):
     tag_url = "https://example.com/tag"
     update_crawl_state(db_conn, tag_url, 5)
@@ -241,6 +263,32 @@ def test_get_random_quote_with_max_words_and_chars(db_conn):
     save_quote(
         db_conn, Quote(text="this quote is definitely too long", author="B", likes=10)
     )
+
+    quote = get_random_quote(db_conn, max_words=2)
+    assert quote is not None
+    assert quote["text"] == "tiny quote"
+
+    quote = get_random_quote(db_conn, max_chars=10)
+    assert quote is not None
+    assert quote["text"] == "tiny quote"
+
+    quote = get_random_quote(db_conn, max_words=1)
+    assert quote is None
+
+
+def test_get_random_quote_with_max_words_and_chars_backfills_missing_cached_lengths(
+    db_conn,
+):
+    from zen_prompt.db import get_random_quote, save_quote
+    from zen_prompt.models import Quote
+
+    save_quote(db_conn, Quote(text="tiny quote", author="A", likes=10))
+    save_quote(
+        db_conn, Quote(text="this quote is definitely too long", author="B", likes=10)
+    )
+
+    db_conn.execute("UPDATE quotes SET word_count = NULL, char_count = NULL")
+    db_conn.commit()
 
     quote = get_random_quote(db_conn, max_words=2)
     assert quote is not None

@@ -3,7 +3,7 @@ import json
 import csv
 import sqlite3
 import typer
-from zen_prompt.db import get_all_quotes, optimize_db, create_subset_db
+from zen_prompt.db import get_all_quotes, optimize_db, create_subset_db, init_db
 from zen_prompt.commands.utils import (
     generate_calver,
     get_distilled_db_path,
@@ -71,6 +71,9 @@ def export(
 
         typer.echo(f"Copying main database to {final_main_db_path}...")
         shutil.copy2(db_path, final_main_db_path)
+
+    typer.echo(f"Ensuring quote length metadata exists in {final_main_db_path}...")
+    init_db(final_main_db_path)
 
     typer.echo(f"Optimizing main database at {final_main_db_path}...")
     optimize_db(final_main_db_path)

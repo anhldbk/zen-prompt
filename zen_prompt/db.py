@@ -18,6 +18,16 @@ def count_words(text: str) -> int:
     return len(normalized.split(" "))
 
 
+QUOTE_WORD_COUNT_SQL = """
+CASE
+    WHEN LENGTH(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' '))) = 0 THEN 0
+    ELSE LENGTH(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' ')))
+        - LENGTH(REPLACE(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' ')), ' ', ''))
+        + 1
+END
+"""
+
+
 def strip_diacritics(s: str) -> str:
     """
     Remove diacritics (accents) from a string.
@@ -70,12 +80,9 @@ def init_db(db_path: str, *, backfill_lengths: bool = True):
             UPDATE quotes
             SET
                 char_count = LENGTH(text),
-                word_count = CASE
-                    WHEN LENGTH(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' '))) = 0 THEN 0
-                    ELSE LENGTH(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' ')))
-                        - LENGTH(REPLACE(TRIM(REPLACE(REPLACE(COALESCE(text, ''), CHAR(10), ' '), CHAR(13), ' ')), ' ', ''))
-                        + 1
-                END
+                word_count = """
+            + QUOTE_WORD_COUNT_SQL
+            + """
             WHERE char_count IS NULL OR word_count IS NULL
             """
         )
@@ -150,6 +157,17 @@ def _build_random_quote_filters(
 ):
     where_clauses = []
     params: list[object] = []
+    word_count_expr = (
+        """
+        COALESCE(
+            q.word_count,
+            """
+        + QUOTE_WORD_COUNT_SQL.replace("text", "q.text")
+        + """
+        )
+    """
+    )
+    char_count_expr = "COALESCE(q.char_count, LENGTH(COALESCE(q.text, '')))"
 
     if exclude_recent_history:
         where_clauses.append(
@@ -168,11 +186,11 @@ def _build_random_quote_filters(
         params.append(min_likes)
 
     if max_words is not None:
-        where_clauses.append("q.word_count <= ?")
+        where_clauses.append(f"{word_count_expr} <= ?")
         params.append(max_words)
 
     if max_chars is not None:
-        where_clauses.append("q.char_count <= ?")
+        where_clauses.append(f"{char_count_expr} <= ?")
         params.append(max_chars)
 
     if tags:
@@ -961,8 +979,25 @@ def create_subset_db(
     quotes = src_conn.execute(query, params).fetchall()
 
     dst_conn.executemany(
-        "INSERT INTO quotes (hash_id, text, author, book_title, tags, likes, link) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        quotes,
+        """
+        INSERT INTO quotes (
+            hash_id, text, author, book_title, tags, likes, link, char_count, word_count
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            (
+                quote[0],
+                quote[1],
+                quote[2],
+                quote[3],
+                quote[4],
+                quote[5],
+                quote[6],
+                len(quote[1] or ""),
+                count_words(quote[1] or ""),
+            )
+            for quote in quotes
+        ],
     )
 
     dst_conn.commit()
